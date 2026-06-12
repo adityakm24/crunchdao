@@ -41,6 +41,7 @@ test set in ~10 min (15h budget).
 Dataset/                 competition parquet files (X/y train + reduced test)
 src/sb/                  reusable library: data loader, metric, feature extractor
 scripts/                 eda, build_features, train, train_rank, sweep
+artifacts/models/        versioned model checkpoints (model_001, model_002, ...)
 submission/main.py       self-contained train()/infer() submission
 submission/local_test.py mimics the Crunch runner end-to-end + determinism check
 experiments/             EXPERIMENT_LOG.md (full reproducibility trail)
@@ -52,7 +53,7 @@ reports/                 EDA tables + figures
 ```bash
 uv run python scripts/eda.py             # EDA tables + figures
 uv run python scripts/build_features.py  # 5M-row feature matrix -> features/
-uv run python scripts/train.py           # train + held-out/reduced-test TS-AUC
+uv run python scripts/train.py --model-id model_00X  # save a versioned checkpoint
 uv run python submission/local_test.py   # end-to-end submission + determinism
 ```
 

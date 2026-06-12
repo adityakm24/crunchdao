@@ -9,13 +9,15 @@ Steps:
      TS-AUC -- the closest local proxy to the public leaderboard.
   6. Retrain on ALL training series and save the final model to model/.
 
-Run:  uv run python scripts/train.py
+Run:  uv run python scripts/train.py --model-id model_001
 """
 from __future__ import annotations
 
 import os
 import sys
 import time
+import argparse
+import shutil
 
 sys.path.insert(0, "src")
 
@@ -27,7 +29,9 @@ from sb.features import StreamingDetector, FEATURE_NAMES, N_FEATURES
 from sb.metric import ts_auc_grouped
 
 MODEL_DIR = "model"
+ARTIFACTS_ROOT = os.path.join("artifacts", "models")
 os.makedirs(MODEL_DIR, exist_ok=True)
+os.makedirs(ARTIFACTS_ROOT, exist_ok=True)
 SEED = 42
 
 # Pure-time features carry NO cross-sectional information (they are identical
@@ -120,6 +124,16 @@ def test_set_ts_auc(booster):
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Train structural break detector.")
+    parser.add_argument(
+        "--model-id",
+        default="model_001",
+        help="Iteration id used for artifact directory (e.g., model_001, model_002).",
+    )
+    args = parser.parse_args()
+    model_dir_iter = os.path.join(ARTIFACTS_ROOT, args.model_id)
+    os.makedirs(model_dir_iter, exist_ok=True)
+
     d = np.load("features/train_features.npz", allow_pickle=True)
     X, y, sid, t_online = d["X"], d["y"], d["series_id"], d["t_online"]
     X = X[:, KEEP_IDX]
@@ -179,8 +193,12 @@ def main() -> None:
     best_iter = booster.best_iteration or NUM_ROUNDS
     dall = lgb.Dataset(X, label=y, weight=w_all, feature_name=list(KEEP_NAMES))
     final = lgb.train(PARAMS, dall, num_boost_round=best_iter)
-    final.save_model(os.path.join(MODEL_DIR, "lgbm.txt"))
-    print(f"Saved {MODEL_DIR}/lgbm.txt (n_trees={final.num_trees()})")
+    iter_model_path = os.path.join(model_dir_iter, "lgbm.txt")
+    latest_model_path = os.path.join(MODEL_DIR, "lgbm.txt")
+    final.save_model(iter_model_path)
+    shutil.copy2(iter_model_path, latest_model_path)
+    print(f"Saved {iter_model_path} (n_trees={final.num_trees()})")
+    print(f"Updated latest pointer at {latest_model_path}")
 
 
 if __name__ == "__main__":

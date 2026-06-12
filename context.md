@@ -67,6 +67,7 @@ pyarrow, matplotlib.
 Dataset/                 competition parquet (X/y train + reduced test) — symlink/local copy
 src/sb/                  library: data.py (loader), metric.py (fast TS-AUC), features.py (extractor)
 scripts/                 eda, build_features, train, train_rank, sweep{,2,3}, ablation, make_submission
+artifacts/models/        versioned iteration artifacts: model_001, model_002, ...
 submission/main.py       self-contained train()/infer() — THE submission artifact
 submission/local_test.py mimics the Crunch runner + determinism check
 experiments/EXPERIMENT_LOG.md  full reproducibility trail
@@ -83,10 +84,17 @@ project imports). **Edit `src/sb/features.py`, then regenerate** — never hand-
 ```bash
 uv run python scripts/eda.py             # EDA tables + figures (reports/)
 uv run python scripts/build_features.py  # ~5M-row feature matrix -> features/
-uv run python scripts/train.py           # train + held-out/reduced TS-AUC, TS-AUC early stop
+uv run python scripts/train.py --model-id model_00X  # save iteration model under artifacts/models/
 uv run python scripts/make_submission.py # regenerate submission/main.py from src/sb/features.py
 uv run python submission/local_test.py   # end-to-end + determinism
 ```
+
+### Iteration artifact rule (must follow)
+- Every meaningful training run gets a new model id folder:
+  `artifacts/models/model_001`, `model_002`, `model_003`, ...
+- `scripts/train.py --model-id <id>` writes `artifacts/models/<id>/lgbm.txt`.
+- It also mirrors the same file to `model/lgbm.txt` so existing scripts stay compatible.
+- Current best checkpoint is stored at `artifacts/models/model_001/lgbm.txt`.
 
 ### Submitting again
 ```bash

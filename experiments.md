@@ -44,6 +44,18 @@ a LightGBM `feval` callback every iteration without dominating training time.
 
 **Current best / submitted: 0.5812.**
 
+## Experiment artifact structure rule
+
+- Save every trained iteration under `artifacts/models/model_XXX/` (incremental id).
+- Example progression:
+  - `artifacts/models/model_001/lgbm.txt`
+  - `artifacts/models/model_002/lgbm.txt`
+  - `artifacts/models/model_003/lgbm.txt`
+- Use:
+  - `uv run python scripts/train.py --model-id model_00X`
+- `model/lgbm.txt` is kept as a latest-compatibility copy, but canonical history is
+  the versioned folders in `artifacts/models/`.
+
 ---
 
 ## Detailed log
