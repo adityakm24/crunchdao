@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ADIA Lab: Structural Break Challenge Blueprint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+        }
+
+        .tab-active {
+            border-bottom: 2px solid #6366f1;
+            color: #6366f1;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Navigation -->
+    <nav class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 bg-indigo-600 rounded flex items-center justify-center text-white font-bold text-xl">A</div>
+                    <span class="font-bold text-slate-800 tracking-tight">ADIA Lab Challenge Monitor</span>
+                </div>
+                <div class="hidden md:flex space-x-8 text-sm font-medium text-slate-600">
+                    <a href="#evolution" class="hover:text-indigo-600 transition-colors">Evolution</a>
+                    <a href="#metrics" class="hover:text-indigo-600 transition-colors">Scoring</a>
+                    <a href="#strategy" class="hover:text-indigo-600 transition-colors">Winning Blueprints</a>
+                    <a href="#dev" class="hover:text-indigo-600 transition-colors">Developer Lab</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Hero Section -->
+        <section class="mb-12">
+            <div class="gradient-bg rounded-3xl p-8 md:p-12 text-white shadow-2xl relative overflow-hidden">
+                <div class="relative z-10">
+                    <div class="inline-flex items-center px-3 py-1 rounded-full bg-indigo-500/30 border border-indigo-400/50 text-xs font-semibold mb-6">
+                        <span class="mr-2">●</span> REAL-TIME EDITION 2026
+                    </div>
+                    <h1 class="text-4xl md:text-5xl font-extrabold mb-4 leading-tight">Mastering Structural Break Detection</h1>
+                    <p class="text-indigo-100 text-lg max-w-2xl mb-8 leading-relaxed">
+                        A definitive strategic roadmap for the ADIA Lab Real-Time Challenge. Monitor, analyze, and detect regime shifts in univariate data streams to win the $100,000 prize pool.
+                    </p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/10 text-center">
+                            <div class="text-indigo-300 text-xs uppercase font-bold mb-1">Total Prize</div>
+                            <div class="text-2xl font-bold">$100k USD</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/10 text-center">
+                            <div class="text-indigo-300 text-xs uppercase font-bold mb-1">1st Place</div>
+                            <div class="text-2xl font-bold">$40k USD</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/10 text-center">
+                            <div class="text-indigo-300 text-xs uppercase font-bold mb-1">Time Limit</div>
+                            <div class="text-2xl font-bold">15h / Week</div>
+                        </div>
+                        <div class="bg-white/10 backdrop-blur-sm p-4 rounded-xl border border-white/10 text-center">
+                            <div class="text-indigo-300 text-xs uppercase font-bold mb-1">End Date</div>
+                            <div class="text-2xl font-bold">Sept 17</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Decorative element -->
+                <div class="absolute right-0 bottom-0 opacity-10 pointer-events-none">
+                    <div class="w-96 h-96 border-8 border-white rounded-full -mr-48 -mb-48"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- The Paradigm Shift -->
+        <section id="evolution" class="mb-16">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-4">The Real-Time Paradigm Shift</h2>
+                <p class="text-slate-600 leading-relaxed max-w-3xl">
+                    Understanding the transition from the 2025 Retrospective Challenge to the 2026 Real-Time Edition is critical. The rules have fundamentally changed to mimic realistic monitoring scenarios where look-ahead is impossible.
+                </p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8">
+                <!-- 2025 Side -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500 font-bold">25</div>
+                        <h3 class="text-xl font-bold text-slate-700">2025 Retrospective</h3>
+                    </div>
+                    <ul class="space-y-4">
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 text-slate-400">✕</div>
+                            <span class="text-slate-600 text-sm"><b>Batch Delivery:</b> Full segments provided at once, allowing for distribution matching of the entire future window.</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 text-slate-400">✕</div>
+                            <span class="text-slate-600 text-sm"><b>Known Boundary:</b> The break was always at a known point; you just had to verify if it happened.</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 text-slate-400">✕</div>
+                            <span class="text-slate-600 text-sm"><b>Single Score:</b> One prediction per series, prioritizing accuracy over latency.</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- 2026 Side -->
+                <div class="bg-indigo-50 border border-indigo-200 rounded-2xl p-6 shadow-sm">
+                    <div class="flex items-center gap-3 mb-6">
+                        <div class="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold">26</div>
+                        <h3 class="text-xl font-bold text-indigo-900">2026 Streaming</h3>
+                    </div>
+                    <ul class="space-y-4">
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 text-indigo-500 font-bold">✓</div>
+                            <span class="text-slate-700 text-sm"><b>Sequential Streaming:</b> Data arrives one point at a time. No look-ahead allowed.</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 text-indigo-500 font-bold">✓</div>
+                            <span class="text-slate-700 text-sm"><b>Unknown Location:</b> Break can occur anywhere in the online segment or not at all (p=0.5).</span>
+                        </li>
+                        <li class="flex items-start gap-3">
+                            <div class="mt-1 text-indigo-500 font-bold">✓</div>
+                            <span class="text-slate-700 text-sm"><b>Stepwise Scoring:</b> Confidence score required at every single step, penalizing late detection.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Metrics & Scoring -->
+        <section id="metrics" class="mb-16 bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+            <div class="grid lg:grid-cols-2 gap-12 items-center">
+                <div>
+                    <h2 class="text-3xl font-bold text-slate-800 mb-4">TS-AUC: Scoring the "Step"</h2>
+                    <p class="text-slate-600 leading-relaxed mb-6">
+                        The <b>Time-Stratified AUC</b> measures how well your model discriminates between "already broken" series and "stable" series at every time step. To win, your model must output a perfect step function.
+                    </p>
+                    <div class="space-y-4 mb-8">
+                        <div class="flex gap-4 items-center">
+                            <div class="w-4 h-4 bg-indigo-600 rounded"></div>
+                            <div class="text-sm text-slate-600"><span class="font-bold text-slate-800">Ideal Score:</span> 0 until the break, then instant 1.</div>
+                        </div>
+                        <div class="flex gap-4 items-center">
+                            <div class="w-4 h-4 bg-amber-500 rounded"></div>
+                            <div class="text-sm text-slate-600"><span class="font-bold text-slate-800">Detection Score:</span> The area between lines is your error margin.</div>
+                        </div>
+                    </div>
+                    <div class="p-4 bg-indigo-50 border-l-4 border-indigo-500 text-indigo-900 text-sm">
+                        <b>Pro Tip:</b> Raw statistical p-values fail because they aren't globally calibrated. Your scores must rank series cross-sectionally.
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="scoreChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Strategic Blueprints -->
+        <section id="strategy" class="mb-16">
+            <div class="text-center mb-12">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">Winning Blueprints</h2>
+                <p class="text-slate-500">Three architectural paths to dominate the leaderboard.</p>
+            </div>
+
+            <div class="flex flex-wrap justify-center gap-2 mb-8" id="stratTabs">
+                <button onclick="switchStrat(0)" class="px-6 py-2 rounded-full font-semibold transition-all strat-tab bg-indigo-600 text-white shadow-md">O(1) Meta-Tracker</button>
+                <button onclick="switchStrat(1)" class="px-6 py-2 rounded-full font-semibold transition-all strat-tab bg-white text-slate-600 border border-slate-200">TSFM Latent Extractors</button>
+                <button onclick="switchStrat(2)" class="px-6 py-2 rounded-full font-semibold transition-all strat-tab bg-white text-slate-600 border border-slate-200">Bayesian HMM</button>
+            </div>
+
+            <div id="stratContent" class="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm min-h-[400px]">
+                <!-- Dynamic Content Injection -->
+                <div id="strat-0" class="animate-fadeIn">
+                    <h3 class="text-2xl font-bold text-slate-800 mb-4">Blueprint 1: The O(1) Online Meta-Feature Tracker</h3>
+                    <p class="text-slate-600 mb-6 leading-relaxed">This strategy adapts the 2025 "Epistemological Diversity" approach into a lightweight streaming model that bypasses the 15-hour computational limit.</p>
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div class="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                            <h4 class="font-bold text-indigo-600 text-sm mb-2 uppercase">Pre-Computation</h4>
+                            <p class="text-xs text-slate-500">Analyze the 5,000 historical points to build a baseline DGP profile (KDE, Mean, Variance).</p>
+                        </div>
+                        <div class="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                            <h4 class="font-bold text-indigo-600 text-sm mb-2 uppercase">Welford's Logic</h4>
+                            <p class="text-xs text-slate-500">Maintain state variables (running mean, variance, CUSUM) using constant-time recursion.</p>
+                        </div>
+                        <div class="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                            <h4 class="font-bold text-indigo-600 text-sm mb-2 uppercase">Tree Inference</h4>
+                            <p class="text-xs text-slate-500">Pass the meta-feature vector into a LightGBM model at each step for instant calibrated probability.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Developer Lab -->
+        <section id="dev" class="mb-16">
+            <div class="bg-slate-900 rounded-3xl p-8 text-white">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold mb-2">Developer Lab: The API Contract</h2>
+                        <p class="text-slate-400 text-sm">Strict adherence to the `yield` pattern is required for deterministic execution.</p>
+                    </div>
+                    <div class="bg-amber-500/10 border border-amber-500/50 text-amber-500 px-4 py-2 rounded-lg text-xs font-mono">
+                        Memory Limit: Critical
+                    </div>
+                </div>
+
+                <div class="grid lg:grid-cols-2 gap-8">
+                    <div class="bg-slate-800 rounded-xl p-4 overflow-x-auto border border-slate-700">
+                        <pre class="text-xs font-mono text-indigo-300">
+<span class="text-slate-500"># The core inference loop</span>
+<span class="text-pink-400">def</span> <span class="text-blue-400">infer</span>(datasets, model_path):
+    model = load(model_path)
+    
+    <span class="text-slate-500"># Mark generator as ready</span>
+    <span class="text-pink-400">yield</span>
+
+    <span class="text-pink-400">for</span> hist, online <span class="text-pink-400">in</span> datasets:
+        model.reset_state()
+        model.calibrate(hist)
+        
+        <span class="text-pink-400">for</span> point <span class="text-pink-400">in</span> online:
+            score = model.predict(point)
+            
+            <span class="text-slate-500"># Yield 0 to 1 confidence</span>
+            <span class="text-pink-400">yield</span> score</pre>
+                    </div>
+                    <div class="flex flex-col justify-center space-y-4">
+                        <div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                            <div class="w-8 h-8 bg-indigo-500/20 rounded flex items-center justify-center text-indigo-400">1</div>
+                            <p class="text-xs text-slate-300"><b class="text-white">Deterministic Output:</b> Results must match within 1e-8. Seed all random states and avoid multi-threading during inference.</p>
+                        </div>
+                        <div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                            <div class="w-8 h-8 bg-indigo-500/20 rounded flex items-center justify-center text-indigo-400">2</div>
+                            <p class="text-xs text-slate-300"><b class="text-white">The No Look-Ahead Rule:</b> You must provide a result BEFORE you can receive the next point. Batch prediction is technically impossible.</p>
+                        </div>
+                        <div class="flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/10">
+                            <div class="w-8 h-8 bg-indigo-500/20 rounded flex items-center justify-center text-indigo-400">3</div>
+                            <p class="text-xs text-slate-300"><b class="text-white">Offline Local Testing:</b> Use the provided testing tool to verify O(1) complexity before submitting to the cloud.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-white border-t border-slate-200 py-12">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-slate-500 text-sm">Strategic Research Synthesis for ADIA Lab Challenge 2026</p>
+        </div>
+    </footer>
+
+    <script>
+        // State Management
+        const strategies = [
+            {
+                title: "Blueprint 1: The O(1) Online Meta-Feature Tracker",
+                desc: "This strategy adapts the 2025 'Epistemological Diversity' approach into a lightweight streaming model that bypasses the 15-hour computational limit.",
+                features: [
+                    { name: "Pre-Computation", detail: "Analyze the 5,000 historical points to build a baseline DGP profile (KDE, Mean, Variance)." },
+                    { name: "Welford's Logic", detail: "Maintain state variables (running mean, variance, CUSUM) using constant-time recursion." },
+                    { name: "Tree Inference", detail: "Pass the meta-feature vector into a LightGBM model at each step for instant calibrated probability." }
+                ]
+            },
+            {
+                title: "Blueprint 2: TSFM Latent Extractors",
+                desc: "Leveraging zero-shot Foundation Models like Salesforce Moirai to extract high-dimensional latent representations.",
+                features: [
+                    { name: "Vector Search", detail: "Establish a historical 'centroid' in embedding space using the pre-break data." },
+                    { name: "Cosine Drift", detail: "At each step, extract current embedding and measure distance from the centroid." },
+                    { name: "Quantization", detail: "Mandatory use of INT8 or ONNX optimization to meet the 15-hour execution quota." }
+                ]
+            },
+            {
+                title: "Blueprint 3: Bayesian Sequential HMM",
+                desc: "Treating structural breaks as a Hidden Markov Model with two states: S=0 (Stable) and S=1 (Broken).",
+                features: [
+                    { name: "Bayesian SPRT", detail: "Update posterior probability recursively using the Sequential Probability Ratio Test." },
+                    { name: "Regime Mixture", detail: "Model alternatives (Mean shift, Variance surge) to identify multiple break types." },
+                    { name: "Exact Posterior", detail: "Yield P(S=1 | X) directly. This is naturally cross-sectionally calibrated for TS-AUC." }
+                ]
+            }
+        ];
+
+        function switchStrat(index) {
+            // Update UI
+            const tabs = document.querySelectorAll('.strat-tab');
+            tabs.forEach((tab, i) => {
+                if(i === index) {
+                    tab.classList.remove('bg-white', 'text-slate-600', 'border-slate-200');
+                    tab.classList.add('bg-indigo-600', 'text-white', 'shadow-md');
+                } else {
+                    tab.classList.add('bg-white', 'text-slate-600', 'border-slate-200');
+                    tab.classList.remove('bg-indigo-600', 'text-white', 'shadow-md');
+                }
+            });
+
+            const content = document.getElementById('stratContent');
+            const s = strategies[index];
+            content.innerHTML = `
+                <div class="animate-fadeIn">
+                    <h3 class="text-2xl font-bold text-slate-800 mb-4">${s.title}</h3>
+                    <p class="text-slate-600 mb-6 leading-relaxed">${s.desc}</p>
+                    <div class="grid md:grid-cols-3 gap-6">
+                        ${s.features.map(f => `
+                            <div class="bg-slate-50 p-5 rounded-xl border border-slate-100">
+                                <h4 class="font-bold text-indigo-600 text-sm mb-2 uppercase">${f.name}</h4>
+                                <p class="text-xs text-slate-500">${f.detail}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Scoring Visualization Chart
+        function initChart() {
+            const ctx = document.getElementById('scoreChart').getContext('2d');
+            
+            // Labels (time steps)
+            const labels = Array.from({length: 50}, (_, i) => i);
+            
+            // Ideal Score (Break at step 25)
+            const ideal = labels.map(i => i < 25 ? 0 : 1);
+            
+            // Typical Good Model
+            const goodModel = labels.map(i => {
+                if (i < 20) return 0.05 + Math.random() * 0.05;
+                if (i < 25) return 0.15 + (i-20) * 0.05;
+                if (i < 35) return 0.6 + (i-25) * 0.03;
+                return 0.95;
+            });
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Ideal Step Function',
+                            data: ideal,
+                            borderColor: '#4f46e5',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false,
+                            stepped: true
+                        },
+                        {
+                            label: 'Winning Predictor',
+                            data: goodModel,
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            borderWidth: 3,
+                            pointRadius: 0,
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom'
+                        },
+                        tooltip: {
+                            enabled: true,
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 1.1,
+                            title: {
+                                display: true,
+                                text: 'Confidence Score'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Online Segment Steps'
+                            },
+                            ticks: {
+                                callback: function(val, index) {
+                                    return index % 10 === 0 ? val : null;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        window.onload = initChart;
+    </script>
+
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+    </style>
+</body>
+</html>

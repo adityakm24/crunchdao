@@ -1,0 +1,16 @@
+[project]
+name = "structural-break"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "crunch-cli>=11.7.0",
+    "lightgbm>=4.6.0",
+    "matplotlib>=3.11.0",
+    "numpy>=2.4.6",
+    "pandas>=3.0.3",
+    "pyarrow>=24.0.0",
+    "scikit-learn>=1.9.0",
+    "scipy>=1.17.1",
+]
