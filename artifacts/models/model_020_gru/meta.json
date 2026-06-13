@@ -1,0 +1,8 @@
+{
+  "val_ts_auc": 0.60483,
+  "hidden": 128,
+  "epochs": 40,
+  "best_epoch": 7,
+  "n_features": 152,
+  "parity_maxdiff": 6.887661552212876e-07
+}

@@ -1,0 +1,33 @@
+{
+  "model_id": "model_023_ensemble",
+  "description": "Round-4 FINAL shipped model. Round-3 GBT+logistic base PLUS a deterministic GRU neural sub-ensemble (3 seeds averaged) for model-class diversity. The recurrent net integrates break evidence over time -- a different inductive bias from trees (rank-corr ~0.83 vs the 0.97-0.99 GBT-GBT), which is the round-4 lift.",
+  "val_ts_auc": 0.6161,
+  "blend": "base = 0.8*mean(GBT logits) + 0.2*logistic logit; final = 0.6*base + 0.4*mean(GRU logits), then sigmoid",
+  "base_members": {
+    "src": "model_018_ensemble",
+    "val_ts_auc": 0.6041,
+    "gbt": [
+      {"src_model": "model_003", "seed": 42,   "rounds": 374, "features": "v2"},
+      {"src_model": "model_008", "seed": 7,    "rounds": 231, "features": "v2"},
+      {"src_model": "model_009", "seed": 2026, "rounds": 306, "features": "v2"},
+      {"src_model": "model_015", "seed": 42,   "rounds": 348, "features": "v4"}
+    ],
+    "logistic": {"src": "model_017_logistic", "features": "v2", "C": 0.5, "blend_weight": 0.2}
+  },
+  "gru_members": [
+    {"src_model": "model_020_gru", "hidden": 128, "seed": 0, "best_epoch": 7, "standalone_val": 0.6048, "rank_corr_vs_base": 0.829},
+    {"src_model": "model_021_gru", "hidden": 96,  "seed": 1, "best_epoch": 7, "standalone_val": 0.5998, "rank_corr_vs_base": 0.831},
+    {"src_model": "model_022_gru", "hidden": 160, "seed": 2, "best_epoch": 7, "standalone_val": 0.6046, "rank_corr_vs_base": 0.836}
+  ],
+  "gru_avg_member": {"standalone_val": 0.6069, "rank_corr_vs_base": 0.847, "n_features": 152, "blend_weight_W_GRU": 0.4},
+  "gru_arch": "single-layer torch.nn.GRU(152 calibrated feats -> H) + linear head, BCEWithLogits with elapsed-ramp weights, best epoch by VAL TS-AUC, cosine LR. Trained OFFLINE (PyTorch/MPS); weights exported to numpy and embedded as base64; inference is exact float64-numpy GRU recurrence (no torch, no RNG) -> deterministic, O(H)/step.",
+  "honest_halves_val": {"W_GRU_0.40": [0.6211, 0.6112]},
+  "w_gru_sensitivity": "blend flat 0.6157-0.6161 across W_GRU 0.35-0.50 (robust plateau); shipped W_GRU=0.40.",
+  "reduced_test_ab": {"note": "100-series reduced test, ids>=10000 the GRU never saw in training (true OOS).", "base_only": 0.5490, "gru_standalone": 0.5566, "base_plus_gru_W040": 0.5595, "lift": 0.0105},
+  "ramp": 50.0,
+  "generated_by": "scripts/make_submission4.py (SB_W_GRU=0.40, 3 GRU dirs)",
+  "trainer": "scripts/train_seq.py (kept in repo for the Out-of-Sample retraining phase)",
+  "determinism": "numpy float64 GRU forward -> shipped path exact; smoke max|diff| = 0.0 (<= 1e-8)",
+  "baselines": {"ewma": 0.4806, "round1": 0.5702, "round2": 0.5812, "round3": 0.6041, "round4": 0.6161},
+  "leaderboard_context": {"top10_cutoff": 0.6135, "rank1": 0.6322, "note": "round-4 VAL 0.6161 clears the top-10 cutoff on the internal split."}
+}

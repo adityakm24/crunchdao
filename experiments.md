@@ -58,6 +58,10 @@ a LightGBM `feval` callback every iteration without dominating training time.
 | ens-search | all 10 GBTs are corr **0.97–0.99** → ensembling caps ~0.602 | — | feature-set diversity ≫ seed diversity |
 | model_019 | v5 features (v4 + LRV-calibrated cumulative CUSUM/PH/mean-z), seed 42 | 0.5879 | ✗ redundant with prewhitened bank |
 | **model_018** | **FINAL: {003,008,009 (v2) + 015 (v4)} GBT mean-logit + 0.2·logistic** | **0.6041** | ✓ **round-3 best, SHIPPED** |
+| **R4 — round 4: GRU neural sub-ensemble (model-class diversity)** | | | |
+| model_020/021/022_gru | 1-layer GRU seeds 0/1/2 (hidden 128/96/160) over 152 calibrated feats, best-epoch-by-VAL | 0.6048 / 0.5998 / 0.6046 | ✓ rank-corr ~0.83 vs base (most decorrelated member yet) |
+| ens-gru | base + **3-seed-AVG** GRU member, W_GRU=0.40 | — | AVG standalone 0.6069; flat plateau 0.6157–0.6161 over W_GRU 0.35–0.50 |
+| **model_023** | **FINAL: 0.6·base(4 GBT + 0.2·logistic) + 0.4·mean(3 GRU)** | **0.6161** | ✓ **round-4 best, SHIPPED — clears ~0.6135 top-10 cutoff** |
 
 **Round-3 best: single 0.6004 (model_009); FINAL ensemble (model_018) = 0.6041.**
 (Round-2 was 0.5812 → **+2.3 pts**; EWMA baseline 0.4806 → **+12.4 pts**.)
@@ -105,6 +109,72 @@ CUSUM bank and multiscale scan maxima — confirming the hypothesis directly.
   calibrated skew/kurt nudged this but did not crack it (subtle breaks have
   median KS ≈ 0.12, near the two-sample detection limit even at W=400).
 - **Early-mid steps** (t<100) ≈ 0.52–0.55 but carry less metric weight.
+
+## R4 — round 4: GRU neural sub-ensemble (model-class diversity)
+
+The round-3 ceiling was GBT saturation (all 10 GBTs corr 0.97–0.99). The logistic
+member (corr 0.93, +0.001) proved *model-class* decorrelation is the remaining
+lever, so round 4 adds a recurrent net — a genuinely different inductive bias that
+**integrates break evidence over time** rather than scoring each step i.i.d.
+
+| Exp | Change | VAL TS-AUC | Decision |
+| --- | --- | --- | --- |
+| model_020_gru | 1-layer GRU **hidden 128**, seed 0, over the 152-feat calibrated stream (drop pure-time/chi2), elapsed-ramp BCE, best-epoch-by-VAL, cosine LR | standalone **0.6048** (rank-corr 0.829) | ✓ decorrelated member |
+| model_021_gru | GRU **hidden 96**, seed 1, dropout 0.1 | standalone 0.5998 (corr 0.831) | ✓ seed/arch diversity |
+| model_022_gru | GRU **hidden 160**, seed 2, dropout 0.2 | standalone 0.6046 (corr 0.836) | ✓ seed/arch diversity |
+| blend base+020 | base 0.6041 + single GRU at w=0.35 | **0.6169** | ✓ +0.0128, honest halves 0.6238/0.6101 both up |
+| AVG member | mean of the 3 GRU step-logits (= ship config) | standalone **0.6069** (corr 0.847) | ✓ averaging denoises the neural member |
+| W_GRU sweep | base + AVG member, weight 0.15→0.55 | flat **0.6157–0.6161** @ 0.35–0.50 | ✓ robust plateau, ship **W_GRU=0.40** |
+| **model_023** | **FINAL: base (4 GBT + 0.2·logistic) `0.6·base + 0.4·mean(3 GRU)`** | **0.6161** | ✓ **round-4 best, SHIPPED** |
+
+**Round-4 best: blended VAL 0.6161 (clears the ~0.6135 top-10 cutoff).**
+(Round-3 was 0.6041 → **+1.2 pts**; EWMA baseline 0.4806 → **+13.5 pts**.)
+Honest 2-fold-on-VAL of the AVG blend at W_GRU=0.40: halves **0.6211 / 0.6112**
+(both well above the 0.6041 base — a real lift, not in-sample noise).
+**Out-of-sample check** (`scripts/reduced_ab.py`, 100-series reduced test, ids ≥
+10000 the GRU never trained on): base-only **0.5490** → base+GRU@0.40 **0.5595**
+(**+0.0105**) — same direction and magnitude as the VAL lift, so the gain
+generalises beyond the VAL split. Determinism (`crunch test` runner re-run):
+max|diff| = **0.0**.
+
+### Round-4 findings
+1. **A recurrent member breaks the GBT ceiling.** The GRU rank-corr to the base is
+   **~0.83** (vs 0.97–0.99 GBT–GBT, 0.93 logistic) — the most decorrelated member
+   yet — because integrating evidence over time is a different mechanism from a
+   per-step tree. Single seed lifts the blend +0.0128; that is the round-4 win.
+2. **The GRU overfits the ranking metric past ~epoch 7.** All three seeds peak at
+   VAL TS-AUC ~0.60–0.605 around epoch 7, then **decay to ~0.53 by epoch 40** while
+   train loss keeps falling. Selecting the best epoch *by VAL TS-AUC* (not loss) is
+   essential; 12–15 epochs suffice next time (saves compute for the 15 h/week OOS
+   phase). This is the neural analogue of the round-2 "select by TS-AUC" lesson.
+3. **Averaging seeds denoises the neural member.** The 3-seed average standalone
+   (0.6069) beats every single seed (0.5998–0.6048) — neural nets are noisier than
+   GBTs, so averaging recovers signal. It raises rank-corr to base slightly (0.847),
+   so its *blended* peak (0.6161) is a hair under the single best seed's (0.6169)
+   but with a **higher worst-half (0.6112 vs 0.6101)** and lower variance → the
+   robust, defensible ship choice for unseen leaderboard data.
+4. **The blend weight is not fragile.** base+AVG is flat at 0.6157–0.6161 across
+   W_GRU 0.35–0.50 and the worst-half keeps rising through 0.50 — so W_GRU=0.40
+   (the full optimum, mid-plateau) is safe.
+5. **Determinism via numpy.** The GRU is trained in PyTorch (MPS) but **shipped as
+   an exact single-layer GRU recurrence in float64 numpy** (weights base64-embedded
+   in `main.py`); numpy↔torch parity ~5e-7, but since we *ship the numpy path*,
+   determinism is exact (smoke re-run max|diff| = 0.0). `train()` still rebuilds the
+   GBTs+logistic deterministically (the cloud has no torch).
+
+### Round-4 pipeline (reproduce)
+```bash
+# train the 3 GRU seeds offline (PyTorch/MPS), ~12-15 epochs is enough:
+uv run python scripts/train_seq.py --hidden 128 --seed 0 --out artifacts/models/model_020_gru --val-out features/val_seq_logits.npz
+uv run python scripts/train_seq.py --hidden 96  --seed 1 --out artifacts/models/model_021_gru --val-out features/val_seq_logits_s1.npz
+uv run python scripts/train_seq.py --hidden 160 --seed 2 --out artifacts/models/model_022_gru --val-out features/val_seq_logits_s2.npz
+uv run python scripts/eval_base.py                                  # cache base 0.6041 VAL logits
+uv run python scripts/blend_seq.py --avg features/val_seq_logits*.npz   # AVG member blend
+uv run python scripts/tune_wgru.py                                  # W_GRU sensitivity (pick 0.40)
+SB_W_GRU=0.40 SB_GRU_DIRS="artifacts/models/model_020_gru,artifacts/models/model_021_gru,artifacts/models/model_022_gru" \
+  uv run python scripts/make_submission4.py                         # regenerate submission/main.py
+uv run python submission/local_test.py                             # end-to-end + determinism (1e-8)
+```
 
 ## Experiment artifact structure rule
 

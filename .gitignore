@@ -15,5 +15,10 @@ features/train_features_v3*.npz
 features/train_features_v4*.npz
 features/train_features_v5*.npz
 
+# cached VAL logits for blend evaluation (regenerable from eval_base/train_seq)
+features/val_base_logits.npz
+features/val_seq_logits*.npz
+
 # local test artifacts
 submission/_model/
+submission/_model_smoke/

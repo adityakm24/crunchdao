@@ -5,7 +5,7 @@ At each online observation we emit a calibrated probability in `[0, 1]` that a
 permanent break has already occurred. Submissions are scored by **Time-Stratified
 AUC (TS-AUC)** — a per-step, cross-sectional AUC averaged over time.
 
-## Approach — O(1) streaming meta-features + per-series null calibration + LightGBM ensemble
+## Approach — O(1) streaming meta-features + per-series null calibration + GBT/logistic/GRU ensemble
 
 1. **Calibrate** from the break-free historical segment: not just the mean/std/
    skew/kurt/acf/eCDF baseline, but the **per-series null distribution** (loc &
@@ -19,10 +19,15 @@ AUC (TS-AUC)** — a per-step, cross-sectional AUC averaged over time.
    *cross-sectionally at a fixed step*, so a raw |z|=3 from a wandering series must
    not outrank |z|=3 from a quiet one — per-series null normalisation removes that
    scale heterogeneity. This was the round-3 breakthrough.
-3. **Score** with a deterministic **ensemble** (equal mean-logit): 3 LightGBM
-   members on the v2 feature subset + 1 on the v4 superset + a logistic-regression
-   member (different model class → real decorrelation). Pure-time features stay
-   dropped; iterations are selected by a custom TS-AUC `feval`.
+3. **Score** with a deterministic **ensemble** (logit space): 3 LightGBM members
+   on the v2 feature subset + 1 on the v4 superset + a logistic-regression member,
+   blended `0.8·mean(GBT) + 0.2·logistic` = the **base**; then a **GRU neural
+   sub-ensemble** (3 averaged seeds) is mixed in at `0.6·base + 0.4·GRU`. The
+   recurrent net integrates break evidence over time — a genuinely different
+   inductive bias from trees (rank-corr ~0.83 vs the 0.97–0.99 GBT–GBT), which is
+   the round-4 lift. The GRU is trained offline (PyTorch) and runs here as an
+   **exact float64-numpy recurrence** (no torch, no RNG) → deterministic, O(H)/step.
+   Pure-time features stay dropped; GBT iterations are selected by a TS-AUC `feval`.
 
 ## Results (held-out VAL, 2000-series internal split)
 
@@ -32,14 +37,18 @@ AUC (TS-AUC)** — a per-step, cross-sectional AUC averaged over time.
 | Round 1 (LightGBM, content-only) | 0.5702 |
 | Round 2 (multi-scale + time-normalised + TS-AUC select) | 0.5812 |
 | Round 3 — v2 per-series null calibration (single model) | 0.5988 |
-| **Round 3 — final ensemble (4 GBT + logistic, mean-logit)** | **0.6041** |
+| Round 3 — final ensemble (4 GBT + logistic, mean-logit) | 0.6041 |
+| Round 4 — GRU neural member (single seed) blended | 0.6169 |
+| **Round 4 — final (base + 3-seed GRU sub-ensemble, W_GRU=0.40)** | **0.6161** |
 
-Leaderboard context: top-10 cutoff ≈ 0.6135, #1 ≈ 0.6322 — the final model is
-~0.9 pt under top-10. Round 3 added **+2.3 pts** over round 2 by per-series
-empirical-null calibration of the streaming statistics; ensembling correlated
-GBTs (corr 0.97–0.99) then caps out, so the logistic member's model-class
-diversity provides the last lift. Submission is deterministic (smoke-test re-run
-diff `0.0`) and runs the full 10k-series test in ~48 min (15 h budget).
+Leaderboard context: top-10 cutoff ≈ 0.6135, #1 ≈ 0.6322 — the round-4 model
+**clears the top-10 cutoff** on the internal split. Round 4 added **+1.2 pts**
+over round 3: the GBT ensemble was saturated (corr 0.97–0.99), so a recurrent
+neural member — a different model class that integrates evidence over time
+(rank-corr ~0.83) — is what broke the plateau; averaging 3 GRU seeds denoises it
+and both honest VAL halves improve (0.6211 / 0.6112). Submission is deterministic
+(smoke-test re-run diff `0.0`; the shipped GRU forward is float64 numpy) and runs
+the full 10k-series test in well under the 15 h budget.
 
 ## Layout
 
