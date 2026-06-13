@@ -171,6 +171,9 @@ def main() -> None:
                    lgb.log_evaluation(100)],
     )
     print(f"trained in {time.time()-t0:.1f}s, best_iter={booster.best_iteration}")
+    # save the val-split booster too (needed for honest failure diagnostics)
+    booster.save_model(os.path.join(model_dir_iter, "lgbm_valsplit.txt"),
+                       num_iteration=booster.best_iteration)
 
     # held-out val TS-AUC
     pred_va = booster.predict(X[va], num_iteration=booster.best_iteration)

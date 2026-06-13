@@ -1,0 +1,27 @@
+{
+  "model_id": "model_010",
+  "features": "features/train_features_v3.npz",
+  "n_features": 139,
+  "drop": [
+    "acf2_diff",
+    "chi2_cum",
+    "log_n_hist",
+    "online_acf2",
+    "t",
+    "w100_chi2",
+    "w200_chi2",
+    "w25_chi2",
+    "w400_chi2",
+    "w50_chi2"
+  ],
+  "keep_only": "",
+  "step_weight": false,
+  "ramp": 50.0,
+  "seed": 42,
+  "leaves": 31,
+  "lr": 0.03,
+  "min_data": 1000,
+  "feature_fraction": 0.8,
+  "best_iter": 385,
+  "val_ts_auc": 0.595
+}
