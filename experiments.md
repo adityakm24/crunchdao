@@ -41,8 +41,70 @@ a LightGBM `feval` callback every iteration without dominating training time.
 | 006b | capacity sweep (TS-AUC select) | **0.5796** | leaves31/lr.03/md1000 |
 | 006c | elapsed-weight positives clip(elapsed/50,0.2,1) | **0.5812** | ✓ round-2 best |
 | 008 | + chi2 dist + lag-2 acf | 0.5777 | ✗ rejected (leaner is better) |
+| **R3 — round 3 (this handoff): per-series empirical-null calibration** | | | |
+| model_002 | reproduce round-2 best (v1 features) | 0.5812 | ✓ baseline reproduced exactly |
+| model_003 | **v2 features**: per-series null-calibrated windows + multiscale scan + running-max + AR(1)-prewhitened CUSUM bank + series-null constants (117 feats, seed 42) | **0.5988** | ✓ **+1.76 pts, breaks the plateau** |
+| model_004 | v2, bigger capacity (leaves63, md500) | 0.5889 | ✗ overfits (as in round 2) |
+| model_005 | v2 + per-step metric weighting `n_pos·n_neg` | 0.5901 | ✗ rejected |
+| model_006 | v2, lean (drop <5k-gain feats → 82) | 0.5925 | ✗ full set better |
+| model_007 | v2, elapsed ramp=25 | 0.5985 | ~flat vs ramp50 |
+| model_008 | v2, seed 7 | 0.5969 | seed variance ~±0.0018 |
+| model_009 | v2, seed 2026 | 0.6004 | best single v2 |
+| ens-v2 | mean-logit ensemble {42,7,2026} | **0.6018** | ✓ +0.0014 over best single |
+| model_010/011/012 | **v3 features** (= v2 + calibrated derived streams \|z\|/Δz/median-crossing), seeds 42/7/2026 | 0.5950 / 0.5925 / 0.5869 | derived streams hurt single-model but decorrelate (corr 0.98) |
+| model_013/014 | shallow (leaves15, md2000) v2 / v3, seeds 13/99 | 0.5960 / 0.5913 | shallow ≈ a touch under main; ensemble fodder |
+| model_015/016 | **v4 features** (= v3 + calibrated higher-moment skew/kurt windows), seeds 42/2026 | 0.5961 / 0.5915 | calibrated skew/kurt rank top-12 gain; v4 is the best decorrelator (corr 0.97) |
+| model_017 | logistic regression on v2 feats (different model class) | 0.5776 | weaker but **corr 0.93** with GBTs → real diversity |
+| ens-search | all 10 GBTs are corr **0.97–0.99** → ensembling caps ~0.602 | — | feature-set diversity ≫ seed diversity |
+| model_019 | v5 features (v4 + LRV-calibrated cumulative CUSUM/PH/mean-z), seed 42 | 0.5879 | ✗ redundant with prewhitened bank |
+| **model_018** | **FINAL: {003,008,009 (v2) + 015 (v4)} GBT mean-logit + 0.2·logistic** | **0.6041** | ✓ **round-3 best, SHIPPED** |
 
-**Current best / submitted: 0.5812.**
+**Round-3 best: single 0.6004 (model_009); FINAL ensemble (model_018) = 0.6041.**
+(Round-2 was 0.5812 → **+2.3 pts**; EWMA baseline 0.4806 → **+12.4 pts**.)
+Honest 2-fold-on-VAL of the final blend: halves 0.6120 / 0.5968 (±~0.007 noise on 2000 series).
+
+### Why v2 worked (the round-3 breakthrough)
+EDA (`scripts/eda2.py`) showed the **null spread of sliding-window stats varies
+2–3× across series** (std of window-50 mean-z ranges 0.53→1.83 series to series)
+because the DGPs have heterogeneous serial dependence and tails. TS-AUC is a
+*cross-sectional* ranking at fixed `t`, so a raw |z|=3 from a wandering series
+must not outrank |z|=3 from a quiet one. **v2 measures each series' own null
+loc/scale for every window statistic on its break-free historical segment (at
+dyadic scales 8…512) and reports calibrated z/p units.** The top features by
+gain are exactly these per-series null descriptors (`null_slv64`,
+`null_mem_slope`, `null_sacf64`, `kurt_h`, `acf1_h`) plus the AR(1)-prewhitened
+CUSUM bank and multiscale scan maxima — confirming the hypothesis directly.
+
+### Round-3 findings that shaped the final model
+1. **Per-series empirical-null calibration is THE lever** (+1.8 pts). Everything
+   else is small by comparison. The mechanism: it removes the cross-sectional
+   scale heterogeneity that TS-AUC punishes. Implemented in `src/sb/features2.py`.
+2. **v3/v4 extra feature families help the *ensemble*, not the single model.**
+   Calibrated derived streams (v3: |z|, Δz, median-crossing) and calibrated
+   higher moments (v4: skew/kurt) each *lower* the single-model VAL by ~0.003
+   (more noisy features) but are the best **decorrelators** (corr 0.97 vs 0.99
+   among v2 seeds), so they lift the blend.
+3. **Learned stacking is a trap here** (`scripts/stack_eval.py`): a logistic or
+   GBT meta-learner on base logits scored **0.59 / 0.55** out of sample vs
+   **0.6025** for equal mean-logit. TS-AUC is a *ranking* metric; per-row logloss
+   meta-fitting misaligns with it and overfits. → **equal mean-logit blending.**
+4. **Model-class diversity beats more seeds.** A logistic-regression member
+   (VAL 0.578, but correlation only 0.93 vs 0.97–0.99 GBT–GBT) lifts the blend
+   0.6031 → **0.6041** at weight 0.2. Cheap, deterministic, kept.
+5. **Capacity, step-weighting, and aggressive feature_fraction all hurt** — same
+   as round 2. Shallow trees (leaves15) are competitive and add diversity.
+6. **Postprocessing (running-max / EWMA smoothing) does not help** (`diagnose.py`):
+   raw per-step scores are already well-ordered; forcing monotonicity costs ~0.003.
+
+### Where the model is still weak (diagnostics, `scripts/diagnose.py`)
+- **By break age**: fresh breaks (elapsed < 25 steps) ≈ 0.52–0.53 AUC —
+  near-undetectable, a *structural* ceiling (tau ~ Uniform means a large share of
+  "broken" rows broke just before `t`). Mature breaks (elapsed > 250) ≈ 0.65.
+- **By break type**: variance 0.66, acf 0.67, but **subtle/distribution-only
+  ≈ 0.56** and it is 68% of breaks — the dominant addressable weakness. v4's
+  calibrated skew/kurt nudged this but did not crack it (subtle breaks have
+  median KS ≈ 0.12, near the two-sample detection limit even at W=400).
+- **Early-mid steps** (t<100) ≈ 0.52–0.55 but carry less metric weight.
 
 ## Experiment artifact structure rule
 
@@ -141,7 +203,70 @@ are dropped in the shipped model (`DROP_FEATURES` in `main.py`).
 
 ---
 
-## Current best (round 2) — SUBMITTED
+## Round 3 detailed log (per-series null calibration → 0.6041)
+
+### v2 (`src/sb/features2.py`, model_003) — per-series empirical-null calibration
+For every trailing-window statistic (mean-z, log-var, acf1-diff, KS, eCDF-L1) we
+measure the **series' own null loc/scale** on the break-free historical segment
+at dyadic window scales (8,16,…,512), then report the online statistic in
+calibrated units, interpolated at the window's current fill. Plus: multiscale
+**scan** (max calibrated stat over window sizes) and its **running-max**;
+**AR(1)-prewhitened** CUSUM/EWMA/variance bank (correctly calibrated for
+autocorrelated series); and per-series **null-descriptor constants** (`acf1_h`,
+`kurt_h`, null spreads at scale 64, long-memory slope). 117 used feats, seed 42:
+**VAL 0.5988** (+1.76 over round-2's 0.5812). Build is sharded
+(`scripts/build_features2.py --shard k --n-shards 4`) to stay in RAM.
+
+### v3 (`src/sb/features3.py`, model_010-012) — calibrated derived streams
+Adds calibrated trailing-window mean/acf of the |z|, Δz and median-crossing
+streams (volatility clustering, smoothness, oscillation-rate changes) + scan +
+running-max + 2 constants. Single-model **VAL 0.595/0.593/0.587** (seeds
+42/7/2026) — *below* v2, but decorrelated.
+
+### v4 (`src/sb/features4.py`, model_015-016) — calibrated higher moments
+Adds null-calibrated window **skewness & excess kurtosis** (windows 100/200/400/
+800) targeting the 68% subtle/shape breaks + scan + running-max + a tail-heaviness
+constant. Single-model **VAL 0.596/0.592**; the calibrated skew/kurt features
+rank in the **top-12 by gain**, so the signal is real even if the net single-model
+effect is small.
+
+### Stacking vs averaging (`scripts/stack_eval.py`, honest 2-fold-on-VAL)
+equal mean-logit **0.6025**; logreg meta **0.5919**; gbm meta **0.5522**.
+→ learned stacking overfits the ranking metric; **equal mean-logit** chosen.
+
+### Ensemble search (`scripts/ensemble_search.py`, `scripts/combo_eval.py`)
+All 10 GBTs correlate **0.97–0.99**. Best diverse blend = **{003,008,009 (v2) +
+015 (v4)} = 0.6031** (v4 is the best decorrelator). Adding weaker v3 seeds dilutes.
+
+### Logistic member (`scripts/final_blend.py`, model_017)
+Logistic on v2 feats: VAL 0.578 but **corr 0.93** with GBTs. Blend
+`0.8·mean(GBT logits) + 0.2·logistic logit` → **VAL 0.6041** (honest halves
+0.612/0.597). Deterministic (frozen scaler+coef). This is the shipped model.
+
+### v5 (`src/sb/features5.py`, model_019) — LRV-calibrated cumulative detectors (REJECTED)
+Hypothesis: `log_t` dominates feature gain because the cumulative detectors
+(cum mean-z, CUSUM bank, Page-Hinkley) grow with both time and dependence;
+calibrate them by the per-series **long-run variance** `LRV = 1+2Σ wₖ·acfₖ`
+(Bartlett-tapered, from historical) so `cum_mean_z/√LRV ~ N(0,1)` regardless of
+autocorrelation. Single-model **VAL 0.5879 — worse than v2 (0.5988)**. The
+**AR(1)-prewhitened CUSUM/EWMA bank already in v2 captures the dependence
+calibration**, so the explicit LRV features are redundant and add noise.
+→ **rejected; not in the shipped model.** (Negative result kept for the record.)
+
+### FINAL (model_018) — shipped
+`submission/main.py` (generated by `scripts/make_submission3.py`) inlines the full
+v2→v3→v4 extractor (162 feats, exact parity verified) and a 4-GBT + logistic
+mean-logit ensemble. train() rebuilds everything deterministically in-cloud;
+infer() streams O(1) per step. **Smoke test: determinism max|diff| = 0.0**,
+~0.4 ms/point → ~48 min for the full 10k-series test (≪ 15 h).
+**Memory bug found & fixed:** the logistic step `X[:,keep].astype(float64)` on the
+full 5M×117 matrix OOM-killed the 15 GB box; now it trains on a deterministic
+stride-5 row subsample (~1M rows) in float32 → peak **4.2 GB** (verified). The
+4 GBTs train comfortably (peak ~6 GB).
+
+---
+
+## Current best (round 2) — SUPERSEDED by round 3
 
 - **Feature set:** EXP-007 multi-scale (windows 25/50/100/200, multi-k CUSUM, var
   CUSUM, Page-Hinkley, var-of-diffs, EWMA, cumulative moments/eCDF) + `log_t` +
@@ -154,21 +279,41 @@ are dropped in the shipped model (`DROP_FEATURES` in `main.py`).
 - `crunch test`: train ~2.5 min, infer fast, **determinism PASS @1e-8**, ~1.6 GB RAM.
 - **Pushed as submission #1** (project `chinchilla`, userId 13086).
 
-### Honest gap
-Held-out VAL 0.581 vs top-10 cutoff ~0.6135 → need ~+3.2 pts. We are on a plateau
-for the single-GBT + handcrafted-feature architecture (sweeps and many feature
-variants all cluster 0.57–0.58).
+### Honest gap (round 3)
+Final VAL **0.6041** vs top-10 cutoff ~0.6135 → **~+0.9 pt short**. Round 3 closed
+most of the round-2 gap (+2.3 pts, 0.581 → 0.604) via per-series null calibration.
+The remaining gap is small but real; GBT ensembling is exhausted (correlations
+0.97–0.99) so the next pts must come from a genuinely different representation.
 
 ---
 
-## Ideas not yet tried (to break past ~0.58)
-1. **Energy distance / MMD** trailing-window-vs-historical (stronger than decile
-   KS for the 68% subtle distributional breaks). *Most promising.*
-2. Higher-lag autocorrelation, partial-acf, and **spectral-slope** change features
-   (for the 20.6% dependence breaks).
-3. **Per-break-type expert models + gating** (mean/var/acf/distribution); 2025
-   winners leaned on epistemic diversity.
-4. **Step-importance sample weighting** by `n_pos(t)*n_neg(t)` and/or focal loss
-   on hard rows near `tau` (cheap; aligns loss with the metric).
-5. **TSFM embeddings** (Chronos/Moirai/TimesFM) as drift features — bundle weights
-   (no runtime internet on the competition accelerator); heavy, do last.
+## Ideas not yet tried (to break past ~0.604 toward 0.6135+)
+*Ranked by expected value given the round-3 diagnostics.*
+1. **Calibrate the CUMULATIVE detectors** (CUSUM / Page-Hinkley / cumulative
+   mean-z) by their per-series H0 growth, the same way v2 calibrated *windows*.
+   These are the highest-gain features yet still rely on `log_t` to discount
+   their growth. Measure the null running-max trajectory on historical blocks and
+   standardise. Same proven family as the +1.8-pt v2 win → **highest EV, ~O(1).**
+2. **A neural sequence member** (tiny temporal CNN/GRU over the calibrated
+   feature stream, or a 1-D CNN on the raw online window). Very different
+   inductive bias from GBTs/linear → the decorrelation that actually moves a
+   saturated ensemble (logistic already showed corr 0.93 helps). Deterministic
+   inference if seeded + single-threaded.
+3. **TSFM drift embeddings** (Chronos/Moirai/TimesFM): historical-vs-trailing
+   embedding distance. Bundle weights (no cloud internet); INT8/ONNX for the
+   15 h budget. Biggest potential lift, biggest effort — do last.
+4. **Energy distance / MMD** and **spectral-slope** change features, calibrated
+   per series (subtle 68% cohort and the 20% acf cohort). Lower EV — KS/L1/skew/
+   kurt already calibrated and correlated with these.
+5. **Per-break-type expert models + gate** (mean/var/acf/subtle) — epistemic
+   diversity, as the 2025 winners used; more plumbing than the above.
+
+### What NOT to retry (settled, with evidence)
+- Learned stacking / meta-learners (overfit the ranking metric, §stack_eval).
+- Bigger trees / leaves>31, aggressive feature_fraction, per-step metric
+  weighting, scale_pos_weight (all hurt, rounds 2 & 3).
+- Score postprocessing (running-max / smoothing) — hurts.
+- Raw (uncalibrated) higher-order or distance features — only the *calibrated*
+  versions carry cross-sectional rank signal.
+- **LRV-calibrated cumulative detectors (v5, model_019 = 0.5879)** — redundant
+  with the AR(1)-prewhitened bank; adds noise. (idea #1 in the old list — tried.)

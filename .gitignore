@@ -8,3 +8,12 @@ wheels/
 
 # Virtual environments
 .venv
+
+# generated feature matrices (LFS push blocked on proxy; regenerate locally)
+features/train_features_v2*.npz
+features/train_features_v3*.npz
+features/train_features_v4*.npz
+features/train_features_v5*.npz
+
+# local test artifacts
+submission/_model/

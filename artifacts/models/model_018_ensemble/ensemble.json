@@ -1,0 +1,19 @@
+{
+  "model_id": "model_018_ensemble",
+  "description": "Round-3 FINAL shipped model. Equal mean-logit ensemble of 4 LightGBM members + a logistic member, on per-series null-calibrated streaming features (v2/v3/v4 nested superset, 162 feats).",
+  "val_ts_auc": 0.6041,
+  "blend": "0.8 * mean(GBT member logits) + 0.2 * logistic logit, then sigmoid",
+  "gbt_members": [
+    {"src_model": "model_003", "seed": 42,   "rounds": 374, "features": "v2"},
+    {"src_model": "model_008", "seed": 7,    "rounds": 231, "features": "v2"},
+    {"src_model": "model_009", "seed": 2026, "rounds": 306, "features": "v2"},
+    {"src_model": "model_015", "seed": 42,   "rounds": 348, "features": "v4"}
+  ],
+  "logistic_member": {"src": "model_017_logistic", "features": "v2", "C": 0.5, "blend_weight": 0.2},
+  "lgb_params": {"num_leaves": 31, "learning_rate": 0.03, "min_data_in_leaf": 1000, "feature_fraction": 0.8, "bagging_fraction": 0.8, "bagging_freq": 1, "deterministic": true},
+  "ramp": 50.0,
+  "generated_by": "scripts/make_submission3.py",
+  "determinism": "smoke-test max|diff| = 0.0 (<= 1e-8)",
+  "speed_us_per_point": 399,
+  "baselines": {"ewma": 0.4806, "round1": 0.5702, "round2": 0.5812, "round3_v2_single": 0.5988}
+}

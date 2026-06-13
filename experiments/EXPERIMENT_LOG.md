@@ -177,3 +177,40 @@ Leaderboard context: #1 intermediate-pavel 63.22; #5 farukcan-saglam 62.51 and
 4. TSFM embeddings (Chronos/Moirai/TimesFM) as drift features (bundle weights; heavy).
 5. Sample weighting by step importance n_pos(t)*n_neg(t); focal loss on hard rows.
 6. Energy-distance / MMD trailing-window-vs-historical (stronger than decile KS for subtle shifts).
+
+---
+
+## ROUND 3 (per-series empirical-null calibration) — 0.5812 -> 0.6041
+
+Full per-iteration ledger is in `experiments.md`; this is the summary.
+
+EDA refresh (`scripts/eda2.py`): the H0 spread of sliding-window stats varies
+2-3x across series (std of window-50 mean-z ranges 0.53..1.83). Because TS-AUC is
+a CROSS-SECTIONAL ranking at a fixed step, that scale heterogeneity is exactly
+what limits the metric -> calibrate every statistic to each series' own null.
+
+- **v2** (`src/sb/features2.py`, model_003): per-series null-calibrated window
+  stats (loc/scale measured on the break-free historical segment at dyadic scales
+  8..512) + multiscale scan + running-max + AR(1)-prewhitened CUSUM/EWMA bank +
+  per-series null-descriptor constants. **VAL 0.5988** (+1.76 over round 2). The
+  null-descriptor constants and prewhitened/scan features dominate feature gain.
+- **v3** (`features3.py`, model_010-012): + calibrated derived streams (|z|, dz,
+  median-crossing). Single-model 0.587-0.595 (below v2) but decorrelated.
+- **v4** (`features4.py`, model_015-016): + null-calibrated higher moments
+  (skew/kurt windows 100/200/400/800). Single-model 0.592-0.596; calibrated
+  skew/kurt rank top-12 by gain.
+- **Ensembling**: all GBTs correlate 0.97-0.99 (`ensemble_search.py`) -> averaging
+  caps ~0.602. Learned stacking REJECTED (overfits ranking, 0.55-0.59 OOS,
+  `stack_eval.py`). Best diverse GBT blend {003,008,009(v2)+015(v4)} = 0.6031.
+- **Logistic member** (`final_blend.py`, model_017): different model class,
+  corr 0.93 -> blend 0.8*mean(GBT logits)+0.2*logistic = **VAL 0.6041** (shipped).
+- **FINAL** (model_018): `submission/main.py` via `scripts/make_submission3.py`
+  inlines v2+v3+v4 (162 feats, exact parity) + the 4-GBT+logistic ensemble.
+  Smoke test determinism max|diff|=0.0; ~0.4 ms/point (~33 min full test).
+
+Honest gap: VAL 0.6041 vs top-10 cutoff 0.6135 -> ~+0.9 pt short. GBT ensembling
+is exhausted; next pts need a new representation. Ranked next steps (see
+context.md/experiments.md): (1) calibrate the CUMULATIVE detectors by per-series
+H0 growth (same proven family), (2) a neural sequence member (decorrelation),
+(3) TSFM drift embeddings. Settled-don't-retry: stacking, big trees, step
+weighting, postprocessing, raw uncalibrated features.
