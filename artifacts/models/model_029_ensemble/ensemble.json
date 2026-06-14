@@ -1,0 +1,45 @@
+{
+  "model_id": "model_029_ensemble",
+  "description": "Round-5 FINAL shipped model. SAME members as round-4 (model_023) -- the round-4 base + the 3-seed GRU neural sub-ensemble -- but with TWO corrections: (1) a SERVE-SIDE GRU BUG FIX, and (2) W_GRU 0.40 -> 0.45. Round-5 is a CORRECTNESS release, NOT a VAL gain: full-VAL is flat at ~0.6160 (= round-4's 0.6161 within noise). Its value is that the deployed StreamingGRU now EXACTLY matches the float64 numpy/torch recurrence the VAL/OOS numbers were measured with (parity ~5e-17), so served == evaluated -- round-4's deployed net served a ~1.3e-2/step-off recurrence.",
+  "val_ts_auc": 0.6160,
+  "blend": "base = 0.8*mean(GBT logits) + 0.2*logistic logit; final = 0.55*base + 0.45*mean(GRU logits), then sigmoid",
+  "round5_changes": {
+    "gru_serve_bug_fix": "StreamingGRU n-gate must gate the HIDDEN bias b_hn by the reset gate r: n = tanh(W_in.x + b_in + r*(W_hn.h + b_hn)). Round-4's SERVED StreamingGRU folded b_hn into the input bias (n = tanh(W_in.x + b_in + b_hn + r*W_hn.h)), an error of (1-r)*b_hn ~ 1.3e-2/step that COMPOUNDED through the recurrence (max|logit diff| 0.675). The trainer's numpy_gru_forward (and the cached VAL logits used to MEASURE 0.6160/0.6161) was ALWAYS correct, so round-4 served != evaluated. Round-5 keeps bih and bhh SEPARATE in BOTH copies and parity-matches torch float64 to ~5e-17, guaranteeing the deployed model scores what we evaluated. This is a correctness fix, not a metric gain.",
+    "w_gru": "0.40 -> 0.45; the full-VAL plateau is flat (0.6161@0.40, 0.6160@0.45, 0.6157@0.50) so the move is risk-free on VAL, while BOTH the OOS reduced sweep (monotone rise 0.5490->0.5604) and the VAL min-half (0.6112->0.6114->0.6115) lean slightly higher."
+  },
+  "base_members": {
+    "src": "model_018_ensemble",
+    "val_ts_auc": 0.6041,
+    "gbt": [
+      {"src_model": "model_003", "seed": 42,   "rounds": 374, "features": "v2"},
+      {"src_model": "model_008", "seed": 7,    "rounds": 231, "features": "v2"},
+      {"src_model": "model_009", "seed": 2026, "rounds": 306, "features": "v2"},
+      {"src_model": "model_015", "seed": 42,   "rounds": 348, "features": "v4"}
+    ],
+    "logistic": {"src": "model_017_logistic", "features": "v2", "C": 0.5, "blend_weight": 0.2}
+  },
+  "gru_members": [
+    {"src_model": "model_020_gru", "hidden": 128, "seed": 0, "best_epoch": 7, "standalone_val": 0.6048, "rank_corr_vs_base": 0.829},
+    {"src_model": "model_021_gru", "hidden": 96,  "seed": 1, "best_epoch": 7, "standalone_val": 0.5998, "rank_corr_vs_base": 0.831},
+    {"src_model": "model_022_gru", "hidden": 160, "seed": 2, "best_epoch": 7, "standalone_val": 0.6046, "rank_corr_vs_base": 0.836}
+  ],
+  "gru_avg_member": {"standalone_val": 0.6069, "rank_corr_vs_base": 0.847, "n_features": 152, "blend_weight_W_GRU": 0.45},
+  "gru_arch": "single-layer torch.nn.GRU(152 calibrated feats -> H) + linear head, BCEWithLogits with elapsed-ramp weights, best epoch by VAL TS-AUC, cosine LR. Trained OFFLINE (PyTorch/MPS); weights exported to numpy and embedded as base64; inference is exact float64-numpy GRU recurrence (no torch, no RNG) -> deterministic, O(H)/step. ROUND-5: served recurrence now bit-for-bit matches the torch reference (separate input/hidden biases).",
+  "w_gru_sensitivity": "blend flat 0.6157-0.6161 across W_GRU 0.35-0.50 (robust plateau); shipped W_GRU=0.45. Exact corrected 3-GRU: full-VAL 0.6161/0.6160/0.6157 and min-half 0.6112/0.6114/0.6115 at W=0.40/0.45/0.50.",
+  "honest_halves_val": {"W_GRU_0.45": [0.6206, 0.6114]},
+  "reduced_test_ab": {"note": "100-series reduced test, ids>=10000 the GRU never saw in training (true OOS). Corrected StreamingGRU.", "base_only": 0.5490, "gru_standalone": 0.5562, "base_plus_gru_W040": 0.5592, "base_plus_gru_W050": 0.5604, "base_plus_gru_W045_shipped": 0.5598, "lift": 0.0108},
+  "rejected_this_round": {
+    "lstm_members": "model_024/025_lstm: VAL honest-halves looked +0.0007 (3-GRU+2-LSTM min-half 0.6119) but the OOS reduced test EXPOSED severe overfit -- standalone collapses to 0.5429 and the blend falls to 0.5490 (= base, ZERO lift) at W=0.40. LSTM rank-corr 0.88 > GRU 0.85 (MORE correlated). NOT SHIPPED.",
+    "more_gru_seeds": "5-GRU average min-half 0.6101 < 3-GRU 0.6112 (new weak seeds DILUTE). Saturated.",
+    "raw_stream_gru": "model_028_rawgru on a single-point raw stream [z, z^2, |z|]: standalone 0.5465 AND rank-corr 0.912 (MORE correlated than the calibrated GRU, not less) -- the base GBTs already extract mean/variance from the calibrated feats better. Blending it HURTS (0.6041 -> 0.6037). Weak AND redundant. NOT SHIPPED.",
+    "per_step_blend_weight": "phase0_squeeze.py: per-online-step bucketed W overfits (fit-A weights hurt half-B by -0.0009, fit-B hurt half-A by -0.0024). REJECTED."
+  },
+  "saturation_verdict": "The neural sub-ensemble on these calibrated features is SATURATED at VAL ~0.6161. Architecture diversity (LSTM) and more seeds do not help; recurrent members are INPUT-bottlenecked. Closing the gap to #1 (~0.6322) needs a different SIGNAL CLASS (e.g. a time-series foundation-model embedding or a dedicated subtle-mean-shift expert), not more nets on the same input.",
+  "ramp": 50.0,
+  "generated_by": "scripts/make_submission5.py (SB_SEQ_DIRS=model_020_gru,model_021_gru,model_022_gru ; SB_W_GRU=0.45)",
+  "trainer": "scripts/train_seq.py (--arch gru|lstm, --features, --raw; kept in repo for the Out-of-Sample retraining phase)",
+  "parity_test": "scripts/test_seq_parity.py -- StreamingGRU & StreamingLSTM vs torch float64 nn.GRU/nn.LSTM, max|diff| ~5e-17 (< 1e-10).",
+  "determinism": "numpy float64 GRU forward -> shipped path exact; crunch-test smoke max|diff| = 0.00e+00 (<= 1e-8).",
+  "baselines": {"ewma": 0.4806, "round1": 0.5702, "round2": 0.5812, "round3": 0.6041, "round4": 0.6161, "round5": 0.6160},
+  "leaderboard_context": {"top10_cutoff": 0.6135, "rank1": 0.6322, "note": "round-5 VAL ~0.6160 (= round-4 within noise) clears the top-10 cutoff on the internal split; ships to make served == evaluated (round-4's deployed GRU was bugged) and to take the marginally-better OOS W=0.45."}
+}

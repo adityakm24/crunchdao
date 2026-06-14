@@ -39,7 +39,8 @@ AUC (TS-AUC)** — a per-step, cross-sectional AUC averaged over time.
 | Round 3 — v2 per-series null calibration (single model) | 0.5988 |
 | Round 3 — final ensemble (4 GBT + logistic, mean-logit) | 0.6041 |
 | Round 4 — GRU neural member (single seed) blended | 0.6169 |
-| **Round 4 — final (base + 3-seed GRU sub-ensemble, W_GRU=0.40)** | **0.6161** |
+| Round 4 — final (base + 3-seed GRU sub-ensemble, W_GRU=0.40) | 0.6161 |
+| **Round 5 — same members, GRU serve-bug fix + W_GRU=0.45 (correctness)** | **0.6160** |
 
 Leaderboard context: top-10 cutoff ≈ 0.6135, #1 ≈ 0.6322 — the round-4 model
 **clears the top-10 cutoff** on the internal split. Round 4 added **+1.2 pts**
@@ -49,6 +50,23 @@ neural member — a different model class that integrates evidence over time
 and both honest VAL halves improve (0.6211 / 0.6112). Submission is deterministic
 (smoke-test re-run diff `0.0`; the shipped GRU forward is float64 numpy) and runs
 the full 10k-series test in well under the 15 h budget.
+
+**Round 5 is a correctness release, not a metric gain.** A parity test
+(`scripts/test_seq_parity.py`) against float64 `torch.nn.GRU` revealed the
+*served* `StreamingGRU` had a bug: the candidate (`n`) gate must gate the hidden
+bias `b_hn` by the reset gate `r` — `n = tanh(W_in·x + b_in + r·(W_hn·h + b_hn))`
+— but the shipped recurrence folded `b_hn` into the input bias, a `(1−r)·b_hn`
+≈ 1.3e-2/step error that compounded (max |logit diff| 0.675). The trainer's
+`numpy_gru_forward` (which *measured* 0.6161) was always correct, so round-4
+served ≠ evaluated. Round 5 keeps `bih`/`bhh` separate in both copies (parity
+~5e-17), so the deployed model now scores what we evaluated, and nudges
+`W_GRU` 0.40→0.45 (full-VAL plateau is flat 0.6157–0.6161; OOS reduced rises
+monotonically 0.5490→0.5604, so 0.45 is the risk-free pick). Rejected this round
+after out-of-sample testing: **LSTM members** (VAL halves looked +0.0007 but the
+OOS reduced test exposed severe overfit — blend collapses to base), **more GRU
+seeds** (dilute), and a **raw-stream GRU** (weak *and* rank-corr 0.912 — the base
+GBTs already extract that signal). The neural sub-ensemble on these features is
+**saturated** at ~0.6161; closing the gap to #1 needs a different *signal class*.
 
 ## Layout
 

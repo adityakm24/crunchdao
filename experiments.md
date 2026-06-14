@@ -62,6 +62,24 @@ a LightGBM `feval` callback every iteration without dominating training time.
 | model_020/021/022_gru | 1-layer GRU seeds 0/1/2 (hidden 128/96/160) over 152 calibrated feats, best-epoch-by-VAL | 0.6048 / 0.5998 / 0.6046 | ✓ rank-corr ~0.83 vs base (most decorrelated member yet) |
 | ens-gru | base + **3-seed-AVG** GRU member, W_GRU=0.40 | — | AVG standalone 0.6069; flat plateau 0.6157–0.6161 over W_GRU 0.35–0.50 |
 | **model_023** | **FINAL: 0.6·base(4 GBT + 0.2·logistic) + 0.4·mean(3 GRU)** | **0.6161** | ✓ **round-4 best, SHIPPED — clears ~0.6135 top-10 cutoff** |
+| **R5 — round 5: GRU serve-bug fix (correctness) + W_GRU 0.40→0.45** | | | |
+| bug | served `StreamingGRU` folded `b_hn` into the input bias → n-gate missed `r·b_hn` (~1.3e-2/step, compounding; max\|logit diff\| 0.675). Trainer `numpy_gru_forward` (which measured 0.6161) was always correct → **served ≠ evaluated** | — | ✓ fixed: `bih`/`bhh` separate in both copies; parity vs torch float64 **5e-17** (`test_seq_parity.py`) |
+| reject: LSTM | model_024/025_lstm (h128/h96); VAL honest-halves looked +0.0007 (3-GRU+2-LSTM min-half 0.6119) | OOS reduced **collapses** (standalone 0.5429, blend = base 0.5490) | ✗ severe overfit (rank-corr 0.88 > GRU 0.85) — **OOS is the truth, VAL halves lied** |
+| reject: 5-GRU | + seeds 3/4 (h112/h144, model_026/027) | min-half 0.6101 < 3-GRU 0.6112 | ✗ weak new seeds dilute the average |
+| reject: raw-stream GRU | model_028 on single-point raw `[z, z², \|z\|]` | 0.5465 | ✗ weak **and** rank-corr 0.912 (redundant — base GBTs extract mean/var better) |
+| reject: per-step blend W | `phase0_squeeze.py` per-online-step bucketed W | in-sample 0.6171 | ✗ overfits (fit-A hurts half-B −0.0009, fit-B hurts half-A −0.0024) |
+| **model_029** | **FINAL: same 3 GRU + base, CORRECTED serve, W_GRU=0.45** | **0.6160** | ✓ **round-5 SHIPPED — correctness; served == evaluated; OOS reduced 0.5598 ≥ round-4 0.5595** |
+
+**Round-5 verdict — the neural sub-ensemble is SATURATED at ~0.6161.** Full-VAL is
+flat (0.6161/0.6160/0.6157 at W_GRU 0.40/0.45/0.50) and min-half barely moves
+(0.6112/0.6114/0.6115). Recurrent members are **input-bottlenecked**: LSTM (a
+different architecture) is *more* correlated with the base (0.88) than the GRU
+(0.85), and a raw-stream GRU is *both* weak and redundant (corr 0.912). Round 5
+ships purely to make the **deployed** model faithful to the **evaluated** one (the
+round-4 served GRU was bugged) and to take the marginally-better OOS W=0.45.
+Closing the gap to #1 (~0.6322) needs a different **signal class** (a time-series
+foundation-model embedding or a dedicated subtle-mean-shift expert), not more nets
+on the same calibrated input.
 
 **Round-3 best: single 0.6004 (model_009); FINAL ensemble (model_018) = 0.6041.**
 (Round-2 was 0.5812 → **+2.3 pts**; EWMA baseline 0.4806 → **+12.4 pts**.)

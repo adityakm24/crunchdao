@@ -1,0 +1,9 @@
+{
+  "val_ts_auc": 0.59654,
+  "arch": "lstm",
+  "hidden": 128,
+  "epochs": 18,
+  "best_epoch": 3,
+  "n_features": 152,
+  "parity_maxdiff": 4.5269263093672407e-07
+}

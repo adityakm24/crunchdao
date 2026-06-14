@@ -86,8 +86,37 @@ def numpy_gru_forward(X, p):
     return out
 
 
+def numpy_lstm_forward(X, p):
+    """Pure-numpy single-layer LSTM + linear head over (T,F) -> (T,) logits.
+
+    Matches torch.nn.LSTM (single layer) exactly. torch gate order is i,f,g,o.
+    """
+    Wih, Whh = p["Wih"], p["Whh"]          # (4H,F), (4H,H)
+    bih, bhh = p["bih"], p["bhh"]          # (4H,), (4H,)
+    Wo, bo = p["Wo"], p["bo"]
+    mean, scale = p["mean"], p["scale"]
+    H = Whh.shape[1]
+    Xs = np.clip((X - mean) / scale, -8.0, 8.0)
+    np.nan_to_num(Xs, copy=False)
+    h = np.zeros(H, dtype=np.float64)
+    c = np.zeros(H, dtype=np.float64)
+    out = np.empty(len(Xs), dtype=np.float64)
+    b = bih + bhh
+    for k in range(len(Xs)):
+        g = Wih @ Xs[k] + Whh @ h + b
+        ig = 1.0 / (1.0 + np.exp(-g[:H]))
+        fg = 1.0 / (1.0 + np.exp(-g[H:2 * H]))
+        gg = np.tanh(g[2 * H:3 * H])
+        og = 1.0 / (1.0 + np.exp(-g[3 * H:]))
+        c = fg * c + ig * gg
+        h = og * np.tanh(c)
+        out[k] = Wo @ h + bo
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--arch", choices=["gru", "lstm"], default="gru")
     ap.add_argument("--hidden", type=int, default=96)
     ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument("--batch", type=int, default=64)
@@ -96,6 +125,12 @@ def main() -> None:
     ap.add_argument("--dropout", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--device", default="auto")
+    ap.add_argument("--features", default=V4,
+                    help="feature matrix npz (default v4 calibrated)")
+    ap.add_argument("--raw", action="store_true",
+                    help="raw-stream member: use ALL features (no DROP) and mark"
+                         " the export raw=True so the submission feeds it the"
+                         " per-step standardized raw vector, not the 152-vec")
     ap.add_argument("--out", default=OUTDIR,
                     help="output dir for gru.npz/meta.json")
     ap.add_argument("--val-out", default="features/val_seq_logits.npz",
@@ -116,13 +151,14 @@ def main() -> None:
         dev = args.device
     print(f"device={dev} hidden={args.hidden} epochs={args.epochs}")
 
-    d = np.load(V4, allow_pickle=True)
+    d = np.load(args.features, allow_pickle=True)
     X, y, sid, t = d["X"], d["y"], d["series_id"], d["t_online"]
     names = [str(n) for n in d["feature_names"]]
-    keep = [i for i, n in enumerate(names) if n not in DROP]
+    drop = set() if args.raw else DROP
+    keep = [i for i, n in enumerate(names) if n not in drop]
     keep_names = [names[i] for i in keep]
     F = len(keep)
-    print(f"X={X.shape} -> using {F} features")
+    print(f"X={X.shape} -> using {F} features (raw={args.raw})")
 
     va = val_mask(sid)
     # series boundaries (matrix is sorted by (sid, t))
@@ -150,21 +186,22 @@ def main() -> None:
     # bucket train series by length for efficient padded batches
     train_idx.sort(key=lambda i: series[i][1] - series[i][0])
 
-    class GRUNet(nn.Module):
-        def __init__(self, F, H, dropout):
+    class SeqNet(nn.Module):
+        def __init__(self, F, H, dropout, arch):
             super().__init__()
-            self.gru = nn.GRU(F, H, batch_first=True)
+            rnn_cls = nn.GRU if arch == "gru" else nn.LSTM
+            self.rnn = rnn_cls(F, H, batch_first=True)
             self.drop = nn.Dropout(dropout)
             self.head = nn.Linear(H, 1)
 
         def forward(self, x, lengths):
             packed = nn.utils.rnn.pack_padded_sequence(
                 x, lengths.cpu(), batch_first=True, enforce_sorted=False)
-            out, _ = self.gru(packed)
+            out, _ = self.rnn(packed)
             out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True)
             return self.head(self.drop(out)).squeeze(-1)
 
-    net = GRUNet(F, args.hidden, args.dropout).to(dev)
+    net = SeqNet(F, args.hidden, args.dropout, args.arch).to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=args.lr, weight_decay=args.wd)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
     bce = nn.BCEWithLogitsLoss(reduction="none")
@@ -233,12 +270,13 @@ def main() -> None:
     net.load_state_dict(best[1])
 
     # export numpy weights
+    fwd = numpy_gru_forward if args.arch == "gru" else numpy_lstm_forward
     sd = net.state_dict()
     p = dict(
-        Wih=sd["gru.weight_ih_l0"].cpu().numpy().astype(np.float64),
-        Whh=sd["gru.weight_hh_l0"].cpu().numpy().astype(np.float64),
-        bih=sd["gru.bias_ih_l0"].cpu().numpy().astype(np.float64),
-        bhh=sd["gru.bias_hh_l0"].cpu().numpy().astype(np.float64),
+        Wih=sd["rnn.weight_ih_l0"].cpu().numpy().astype(np.float64),
+        Whh=sd["rnn.weight_hh_l0"].cpu().numpy().astype(np.float64),
+        bih=sd["rnn.bias_ih_l0"].cpu().numpy().astype(np.float64),
+        bhh=sd["rnn.bias_hh_l0"].cpu().numpy().astype(np.float64),
         Wo=sd["head.weight"].cpu().numpy()[0].astype(np.float64),
         bo=float(sd["head.bias"].cpu().numpy()[0]),
         mean=mean.astype(np.float64), scale=scale.astype(np.float64),
@@ -251,7 +289,7 @@ def main() -> None:
         for i in val_idx[:5]:
             s0, s1 = series[i]
             Xseq = X[s0:s1][:, keep].astype(np.float64)
-            npy = numpy_gru_forward(Xseq, p)
+            npy = fwd(Xseq, p)
             seqs = [seq_tensor(s0, s1)]
             lengths = __import__("torch").tensor([s1 - s0])
             xb = pad_sequence(seqs, batch_first=True).to(dev)
@@ -261,17 +299,19 @@ def main() -> None:
 
     os.makedirs(out_dir, exist_ok=True)
     np.savez(os.path.join(out_dir, "gru.npz"),
-             feature_names=np.array(keep_names), hidden=args.hidden, **p)
+             feature_names=np.array(keep_names), hidden=args.hidden,
+             kind=args.arch, raw=bool(args.raw), **p)
     # cache VAL neural logit (numpy forward, the deterministic one we ship)
     val_pred = np.zeros(len(sid), dtype=np.float64)
     for i in val_idx:
         s0, s1 = series[i]
-        val_pred[s0:s1] = numpy_gru_forward(X[s0:s1][:, keep].astype(np.float64), p)
+        val_pred[s0:s1] = fwd(X[s0:s1][:, keep].astype(np.float64), p)
     np.savez(val_out, val_logit=val_pred[va])
     final_auc = ts_auc_grouped(tv, yv, val_pred[va])
     with open(os.path.join(out_dir, "meta.json"), "w") as fh:
-        json.dump(dict(val_ts_auc=round(float(final_auc), 5), hidden=args.hidden,
-                       epochs=args.epochs, best_epoch=best[2], n_features=F,
+        json.dump(dict(val_ts_auc=round(float(final_auc), 5), arch=args.arch,
+                       hidden=args.hidden, epochs=args.epochs,
+                       best_epoch=best[2], n_features=F,
                        parity_maxdiff=maxdiff), fh, indent=2)
     print(f"numpy VAL TS-AUC {final_auc:.4f}  saved -> {out_dir}/gru.npz")
 

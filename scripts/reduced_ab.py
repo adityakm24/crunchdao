@@ -41,6 +41,8 @@ def main() -> None:
     l_coef, l_int = lg["coef"], float(lg["intercept"][0])
 
     grus = sub._load_grus(sub._NAME_TO_COL)
+    calib_grus = [g for g in grus if getattr(g, "is_raw", False) is False]
+    raw_grus = [g for g in grus if getattr(g, "is_raw", False)]
     w_seq = 1.0 / len(grus)
 
     det = sub.StreamingDetector()
@@ -57,6 +59,7 @@ def main() -> None:
         det.calibrate(np.asarray(s.x_hist, dtype=np.float64))
         for g in grus:
             g.reset()
+        mu_h, sd_h = det.mu_h, det.sd_h
         for i, x in enumerate(s.x_online):
             feats = det.update(float(x))
             acc = 0.0
@@ -67,7 +70,11 @@ def main() -> None:
             xs = np.clip((feats[l_keep] - l_mean) / l_scale, -8.0, 8.0)
             lin = float(np.dot(xs, l_coef)) + l_int
             base = acc + sub.W_LIN * lin
-            seq = sum(g.step(feats) for g in grus) * w_seq
+            seq = sum(g.step(feats) for g in calib_grus)
+            if raw_grus:
+                rv = sub._raw_vec(float(x), mu_h, sd_h)
+                seq += sum(g.step(rv) for g in raw_grus)
+            seq *= w_seq
             base_logits.append(base)
             seq_logits.append(seq)
             ys.append(int(key.loc[(s.series_id, i)]))
