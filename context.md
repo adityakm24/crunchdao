@@ -237,7 +237,25 @@ per-break-type expert for the subtle-break majority.
 > Note: the obvious "calibrate the cumulative detectors" idea was tried as **v5**
 > (LRV calibration, `src/sb/features5.py`, model_019) and **REJECTED** (0.5879).
 > **Round 4 implemented direction #1 below (a GRU sequence member): VAL
-> 0.6041 → 0.6161.** The remaining directions are the next pushes toward #1.
+> 0.6041 → 0.6161.** **Round 5 fixed a serve-side GRU bug (served == evaluated)
+> and found the neural sub-ensemble is SATURATED at ~0.6161** — more seeds, an
+> LSTM, and a raw-stream member were all tried and rejected via the OOS reduced
+> test (see experiments.md R5). So directions #2/#3 (a different *signal class*)
+> are now the real path to #1, not more nets on the same calibrated input.
+
+### Round 6 — start here (housekeeping first, then a new signal class)
+
+0. **⚠️ Security remediation (do first).** The crunch CLI auth **token** was
+   committed to history (`structural-break-real-time-chinchilla/.crunchdao/token`,
+   live on `origin/main` since before round 5). The **non-destructive** part is
+   DONE in round 5's follow-up: `.crunchdao/` is now `.gitignore`d and the token +
+   `project.json` were `git rm --cached` (untracked, still on disk). **Still TODO
+   (destructive — owner action):** (a) **rotate the token** in the CrunchDAO
+   dashboard (assume compromised); (b) **purge it from history** —
+   `git filter-repo --path structural-break-real-time-chinchilla/.crunchdao/token --invert-paths`
+   then `git push --force`. Also consider purging the large tracked parquets under
+   `structural-break-real-time-chinchilla/data/` (X_train.parquet ~218 MB) to
+   de-bloat the repo. Coordinate the force-push since it rewrites shared history.
 
 1. **✅ DONE (round 4) — a neural sequence member.** A single-layer GRU over the
    calibrated feature stream, trained offline and run as exact float64-numpy at
@@ -245,10 +263,10 @@ per-break-type expert for the subtle-break majority.
    Standalone ~0.605, rank-corr ~0.83 vs the GBT base → blend **0.6161**. The GRU
    *overfits past ~epoch 7* (VAL peaks then decays as train loss falls), so
    best-epoch-by-VAL selection is essential; 12–15 epochs suffice next time.
-   **Next within this lever:** a small **temporal CNN or 2-layer GRU / tiny
-   Transformer** over a short raw-window + calibrated-feature stack; more seeds in
-   the average; or a learned (still deterministic) blend weight per online-step
-   bucket. Each is incremental on top of the existing neural member.
+   **Round 5 update:** this lever is now SATURATED — a 2nd architecture (LSTM),
+   more seeds, and a different input (raw-stream GRU) were all tried and rejected
+   (the LSTM overfits OOS, extra seeds dilute, the raw stream is weak AND
+   rank-corr 0.91). Do NOT keep adding nets on the same calibrated input.
 2. **TSFM drift embeddings** (Chronos/Moirai/TimesFM), historical-vs-trailing
    embedding distance as features. Bundle weights (no cloud internet); INT8/ONNX
    for the 15 h budget. Biggest potential lift, biggest effort.
@@ -264,6 +282,13 @@ per-step weighting / scale_pos_weight; score postprocessing (running-max/
 smoothing); raw uncalibrated distance/higher-moment features; **LRV-calibrated
 cumulative detectors (v5)**; **training the GRU >15 epochs** (it overfits the
 ranking metric — VAL peaks ~epoch 7). All measured to hurt or no-op.
+**Round-5 additions (all rejected via the OOS reduced test):** LSTM sequence
+members (look +0.0007 on VAL halves but COLLAPSE out-of-sample); **more GRU seeds**
+beyond 3 (dilute the average); a **raw-stream GRU** on single-point `[z, z², |z|]`
+(weak 0.5465 AND rank-corr 0.91 — redundant with the base GBTs); **per-online-step
+bucketed blend weight** (`phase0_squeeze.py` — overfits both honest halves).
+The neural sub-ensemble is **saturated**; spend round-6 effort on a new signal
+class (§7 #2/#3), not more nets.
 
 ---
 
@@ -285,4 +310,6 @@ ranking metric — VAL peaks ~epoch 7). All measured to hurt or no-op.
 - The competition accelerator (if you go the GPU/TSFM route) has **no internet** —
   bundle any model weights as a Kaggle/crunch resource, don't pip-install at runtime.
 - `submission/main.py` is generated — edit `src/sb/features*.py` (or the GRU via
-  `scripts/train_seq.py`) + regenerate with `scripts/make_submission4.py`.
+  `scripts/train_seq.py`) + regenerate with `scripts/make_submission5.py`
+  (`SB_SEQ_DIRS=...,...`, `SB_W_GRU=0.45`; `make_submission4.py` is the round-4
+  generator, kept for reference).

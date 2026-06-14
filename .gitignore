@@ -23,3 +23,9 @@ features/val_seq_logits*.npz
 # local test artifacts
 submission/_model/
 submission/_model_smoke/
+
+# crunch CLI local state — contains an AUTH TOKEN (secret). Never commit.
+# NOTE: token + project.json were committed in earlier history; rotate the token
+# and purge from history in round 6 (see context.md "Security remediation").
+.crunchdao/
+**/.crunchdao/
