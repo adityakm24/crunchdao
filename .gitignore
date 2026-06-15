@@ -19,6 +19,15 @@ features/train_raw_stream.npz
 # cached VAL logits for blend evaluation (regenerable from eval_base/train_seq)
 features/val_base_logits.npz
 features/val_seq_logits*.npz
+features/val_cnn_logits.npz
+features/val_et_logits.npz
+
+# round-6 negative-result heavy artifact: ExtraTrees joblib (252MB, reproducible
+# via scripts/finalize_et.py — keep only meta.json under version control)
+artifacts/models/model_030_extratrees/model.joblib
+
+# macOS finder cruft
+.DS_Store
 
 # local test artifacts
 submission/_model/

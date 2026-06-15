@@ -69,6 +69,15 @@ a LightGBM `feval` callback every iteration without dominating training time.
 | reject: raw-stream GRU | model_028 on single-point raw `[z, z², \|z\|]` | 0.5465 | ✗ weak **and** rank-corr 0.912 (redundant — base GBTs extract mean/var better) |
 | reject: per-step blend W | `phase0_squeeze.py` per-online-step bucketed W | in-sample 0.6171 | ✗ overfits (fit-A hurts half-B −0.0009, fit-B hurts half-A −0.0024) |
 | **model_029** | **FINAL: same 3 GRU + base, CORRECTED serve, W_GRU=0.45** | **0.6160** | ✓ **round-5 SHIPPED — correctness; served == evaluated; OOS reduced 0.5598 ≥ round-4 0.5595** |
+| **R6 — round 6: aggressive new-signal hunt (6 avenues, all negative)** | | | |
+| reject: subtle detectors | `eda_subtle.py` 10 detectors (AD, energy/CvM, spectral/perm entropy, Wasserstein, Hurst, turning-pt, IQR) at 6 snapshots × cum/trailing | subtle-cohort **≤0.50** for ALL | ✗ subtle breaks are a true ≤0.50 ceiling (68% of breaks, KS≈0.12 < detection limit) |
+| reject: distributional incr. | `eda_incremental.py` best 5 (AD/energy/KS/Wasserstein/Hurst) blended onto real base | **+0.0005**, optimal weight **0.00** | ✗ orthogonal info already in base; rank-corr 0.10–0.16 but signal too weak |
+| reject: Shiryaev-Roberts | `eda_sr.py` SR mixture over mean/var/joint deltas + AR(1)-prewhiten | standalone 0.52, **+0.001**, weight 0 | ✗ sequential CP statistic adds nothing over the calibrated bank |
+| reject: ExtraTrees/RF | `diverse_members.py`+`finalize_et.py`; ET(300,leaf200) standalone **0.5930** lifts base +0.0009 | onto **shipped** stack: flat (rank-corr to GRU **0.958**) | ✗ ET redundant with GRU; RF (0.5872) weak — bagging variance already covered |
+| reject: windowed filters | `eda_window.py` edge/varenv/acfenv/transient/ramp matched filters at L=20/40/80/160 | best acfenv80 **+0.0017**, weight **0.00** | ✗ linear shape filters near-dead vs shipped |
+| reject: 1D-CNN (raw) | `train_cnn.py` causal dilated CNN over raw z-stream, R=63: **1-ch** (32ch, std 0.5191) + **3-ch** z,z²,\|z\| (48ch, std 0.5212) | blend onto shipped **flat→declining** every Wc (0.6160→0.6142), both halves down | ✗ most decorrelated member ever (rank-corr **0.77**) but tops out ~0.52 standalone — below the lift threshold |
+| **SHIPPED stays model_029** | round 6 = thorough negative-results round; no member beats VAL 0.6160 | **0.6160** | ✓ **keep round-5; saturation confirmed across 6 signal classes** |
+
 
 **Round-5 verdict — the neural sub-ensemble is SATURATED at ~0.6161.** Full-VAL is
 flat (0.6161/0.6160/0.6157 at W_GRU 0.40/0.45/0.50) and min-half barely moves
@@ -81,7 +90,62 @@ Closing the gap to #1 (~0.6322) needs a different **signal class** (a time-serie
 foundation-model embedding or a dedicated subtle-mean-shift expert), not more nets
 on the same calibrated input.
 
-**Round-3 best: single 0.6004 (model_009); FINAL ensemble (model_018) = 0.6041.**
+## R6 — round 6: aggressive new-signal hunt (six avenues, all negative)
+
+Round 5 ended on the hypothesis that the gap to #1 needs a **different signal
+class**. Round 6 tested that hypothesis hard: six independent new representations,
+each measured for *incremental* lift onto the **shipped** stack (not standalone),
+with honest two-halves and — for any VAL winner — a hard OOS reduced-test gate.
+**All six failed.** The result is a clean, well-evidenced verdict: the blended
+model is **saturated on the information present in the given inputs**.
+
+| # | Avenue | Script | Best incremental result | Why it failed |
+| --- | --- | --- | --- | --- |
+| 1 | Subtle-break detectors (10) | `eda_subtle.py` | subtle-cohort AUC **≤0.50** for every detector | Subtle/distribution-only breaks (68% of all breaks, median KS≈0.12) sit below the two-sample detection limit — a **structural** ceiling, not a modelling gap. |
+| 2 | Distributional incremental | `eda_incremental.py` | **+0.0005**, optimal blend weight **0.00** | AD/energy/CvM/Wasserstein/Hurst decorrelate (rank-corr 0.10–0.16) but are individually too weak; the base GBTs already extract what little they add. |
+| 3 | Shiryaev–Roberts mixture | `eda_sr.py` | standalone 0.52, **+0.001**, weight 0 | A sequential change-point statistic over mean/var/joint deltas (+AR(1) prewhiten) adds nothing over the calibrated CUSUM/PH bank. |
+| 4 | Bagging (ExtraTrees/RF) | `diverse_members.py`, `finalize_et.py` | ET standalone **0.5930**, lifts *base* +0.0009 but **flat on shipped** | ET's rank-corr to the **GRU** is **0.958** — the temporal-integration variance reduction bagging offers is already supplied by the 3-GRU sub-ensemble. RF (0.5872) is just weaker. |
+| 5 | Raw windowed matched filters | `eda_window.py` | best acfenv80 **+0.0017**, weight **0.00** | Linear edge/variance-envelope/ACF-envelope/transient/ramp filters over the raw window are near-dead once the shipped neural member is present. |
+| 6 | Learned 1-D CNN (raw stream) | `train_cnn.py`, `eval_cnn.py` | **flat→declining** at every blend weight | See below — the decisive test. |
+
+### The CNN test (avenue 6, the one untested lever)
+The single-point raw GRU (round 5) was weak *and* redundant, but a **windowed**
+convolution is a genuinely different input: a causal dilated 1-D CNN whose
+receptive field (R=63, dilations 1,2,4,8,16) sees local *shape*, not summary
+statistics. Two configurations were trained to convergence (PyTorch/MPS, exported
+to exact float64 numpy, parity ~1e-6 → deterministic at ship time):
+
+- **1-channel** (raw z only, 32 ch, 25 ep): converged hard at VAL standalone
+  **0.5191** from epoch ~12 (loss flat 0.476); rank-corr to shipped **0.769** —
+  the *most decorrelated member ever produced*.
+- **3-channel** (z, z², |z|, 48 ch, 30 ep): VAL standalone **0.5212** (+0.002 from
+  the extra channels), rank-corr **0.773**.
+
+Both blended **identically** onto the shipped 0.6160 stack: flat at Wc=0.05
+(0.6159/0.6160) then **monotone declining** through Wc=0.40 (0.6142), with *both*
+honest halves down at every weight. The decorrelation is real (lower rank-corr
+than the GRU's 0.85) but the standalone signal (~0.52) is **below the threshold
+where decorrelation can lift a saturated blend** — so by the pre-agreed hard gate
+(must beat VAL 0.6160 *and* OOS 0.5598), the CNN **does not ship** and the OOS
+test is moot. `scripts/reduced_cnn.py` (the OOS evaluator) is built and ready but
+was correctly never needed.
+
+### Round-6 verdict
+Six independent signal classes — hand-crafted subtle detectors, distributional
+distances, a sequential change-point statistic, tree bagging, linear shape filters,
+and a learned convolutional representation — **all confirm the same thing**: every
+signal that decorrelates from the gradient-boosted trees is **already captured by
+the 3-GRU sub-ensemble**, and the residual (subtle mean/distribution shifts) is at
+the information-theoretic detection floor. **The model is comprehensively saturated
+at VAL 0.6160 / OOS 0.5598 on the given inputs.** Round 6 ships **nothing** and
+keeps round-5 `model_029`. Beating the #1 leaderboard score (~0.6322) from 0.6160
+would require a fundamentally **different data source or label structure** (e.g. a
+pretrained time-series foundation-model embedding bundled offline), not another
+member built on the same calibrated feature stream — which is the single highest-EV
+remaining idea but a large, separate effort. All negative results are preserved as
+artifacts (`model_030_extratrees`, `model_031_cnn`) and scripts for reproducibility.
+
+
 (Round-2 was 0.5812 → **+2.3 pts**; EWMA baseline 0.4806 → **+12.4 pts**.)
 Honest 2-fold-on-VAL of the final blend: halves 0.6120 / 0.5968 (±~0.007 noise on 2000 series).
 

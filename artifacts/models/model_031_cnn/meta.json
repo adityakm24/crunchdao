@@ -1,0 +1,17 @@
+{
+  "val_ts_auc": 0.52116,
+  "kind": "cnn",
+  "channels": 48,
+  "blocks": 5,
+  "ksize": 3,
+  "dilations": [
+    1,
+    2,
+    4,
+    8,
+    16
+  ],
+  "receptive_field": 63,
+  "best_epoch": 21,
+  "parity_maxdiff": 1.1020785919413356e-06
+}

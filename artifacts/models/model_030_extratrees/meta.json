@@ -1,0 +1,19 @@
+{
+  "kind": "extratrees",
+  "params": {
+    "n_estimators": 300,
+    "max_features": "sqrt",
+    "min_samples_leaf": 200,
+    "bootstrap": false,
+    "n_jobs": -1,
+    "random_state": 42
+  },
+  "split_seed": 42,
+  "standalone_val": 0.593011035612109,
+  "rankcorr_base": 0.9609271058395514,
+  "rankcorr_shipped": 0.9582060768618379,
+  "shipped_val": 0.6160382969316178,
+  "best_we": 0.05,
+  "best_full": 0.6159508879328068,
+  "best_minhalf": 0.6115771437433108
+}
