@@ -48,6 +48,13 @@ SEQ_DIRS = os.environ.get(
 W_LIN = float(os.environ.get("SB_W_LIN", "0.2"))   # logistic weight within base
 W_GRU = float(os.environ.get("SB_W_GRU", "0.40"))  # neural-member weight vs base
 
+# Round-8 metric-aligned member: a LightGBM rank_xendcg booster grouped by online
+# step (model_033_xendcg). Frozen + embedded like the neural members; mixed into
+# the GBT base mean as a 5th member (rescaled to GBT-logit scale). Validated:
+# +0.0006 OOS reduced, both VAL honest halves up across the whole weight grid.
+RANK_DIR = os.environ.get("SB_RANK_DIR", "artifacts/models/model_033_xendcg")
+RANK_GW = float(os.environ.get("SB_RANK_GW", "0.15"))  # rank weight inside GBT mean
+
 
 HEADER = '''"""ADIA Lab Structural Break Real-Time — self-contained submission (round 5).
 
@@ -231,6 +238,17 @@ _DEFAULT_DROP = {
 _NAME_SET = set(FEATURE_NAMES)
 _NAME_TO_COL = {n: i for i, n in enumerate(FEATURE_NAMES)}
 
+_RANK_B64 = __RANK_B64__
+RANK_GW = __RANK_GW__
+
+
+def _load_rank():
+    """Decode the embedded rank_xendcg booster + its feature->column map."""
+    import lightgbm as lgb
+    b = lgb.Booster(model_str=base64.b64decode(_RANK_B64).decode("ascii"))
+    keep = np.asarray([_NAME_TO_COL[n] for n in b.feature_name()], dtype=np.int64)
+    return b, keep
+
 
 def _keep_for(version):
     if version == "v2":
@@ -325,6 +343,23 @@ def train(
              scale=scale.astype(np.float64),
              coef=lr.coef_[0], intercept=np.array([lr.intercept_[0]]))
 
+    # ---- rank member: frozen booster (embedded); compute the rescale constants
+    # that map its score onto THIS run's GBT-logit scale (consistent at serve).
+    rb, rkeep = _load_rank()
+    s5 = slice(None, None, 5)
+    Xr = X[s5]
+    rsc = rb.predict(Xr[:, rkeep])
+    gl = np.zeros(Xr.shape[0], dtype=np.float64)
+    for mi, (seed, rounds, version) in enumerate(ENSEMBLE):
+        bb = lgb.Booster(
+            model_file=os.path.join(model_directory_path, f"lgbm_{mi}.txt"))
+        pb = np.clip(bb.predict(Xr[:, _keep_for(version)]), 1e-7, 1.0 - 1e-7)
+        gl += np.log(pb / (1.0 - pb))
+    gl /= len(ENSEMBLE)
+    np.savez(os.path.join(model_directory_path, "rank_const.npz"),
+             rk_mu=float(rsc.mean()), rk_sd=float(rsc.std() + 1e-12),
+             gbt_mu=float(gl.mean()), gbt_sd=float(gl.std() + 1e-12))
+
 
 def infer(
     datasets: Iterable[Tuple[List[float], Iterable[float]]],
@@ -353,6 +388,12 @@ def infer(
     raw_seqs = [g for g in seqs if g.is_raw]
     w_seq = (1.0 / len(seqs)) if seqs else 0.0
 
+    rank_b, rank_keep = _load_rank()
+    rc = np.load(os.path.join(model_directory_path, "rank_const.npz"))
+    rk_mu = float(rc["rk_mu"]); rk_sd = float(rc["rk_sd"])
+    gbt_mu = float(rc["gbt_mu"]); gbt_sd = float(rc["gbt_sd"])
+    rank_row = np.empty((1, len(rank_keep)), dtype=np.float64)
+
     det = StreamingDetector()
 
     yield  # signal readiness
@@ -375,7 +416,12 @@ def infer(
             xs = (xv - l_mean) / l_scale
             np.clip(xs, -8.0, 8.0, out=xs)
             lin_logit = float(np.dot(xs, l_coef)) + l_int
-            base_logit = acc + W_LIN * lin_logit
+            mean4 = acc / (1.0 - W_LIN)
+            rank_row[0] = feats[rank_keep]
+            rraw = float(rank_b.predict(rank_row)[0])
+            rank_as_gbt = (rraw - rk_mu) / rk_sd * gbt_sd + gbt_mu
+            gbt5 = (1.0 - RANK_GW) * mean4 + RANK_GW * rank_as_gbt
+            base_logit = (1.0 - W_LIN) * gbt5 + W_LIN * lin_logit
             if seqs:
                 seq_logit = 0.0
                 for g in calib_seqs:
@@ -473,10 +519,17 @@ def main() -> None:
 
     blobs = _embed_seqs()
     seqnet = SEQNET_CODE.replace("__SEQ_B64__", repr(blobs))
+    with open(os.path.join(RANK_DIR, "lgbm_rank.txt"), "rb") as fh:
+        rank_blob = base64.b64encode(fh.read()).decode("ascii")
+    print(f"  embedded RANK {RANK_DIR}/lgbm_rank.txt "
+          f"({os.path.getsize(os.path.join(RANK_DIR, 'lgbm_rank.txt'))/1024:.0f} KB)"
+          f"  gw={RANK_GW}")
     wrapper = (WRAPPER
                .replace("__ENSEMBLE__", repr(ENSEMBLE_RECIPES))
                .replace("__W_LIN__", repr(W_LIN))
-               .replace("__W_GRU__", repr(W_GRU)))
+               .replace("__W_GRU__", repr(W_GRU))
+               .replace("__RANK_B64__", repr(rank_blob))
+               .replace("__RANK_GW__", repr(RANK_GW)))
 
     out = HEADER + body2 + "\n\n" + body3 + "\n\n" + body4 + seqnet + wrapper
     os.makedirs("submission", exist_ok=True)

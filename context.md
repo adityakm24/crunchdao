@@ -34,8 +34,23 @@ Consequences that drove every design decision:
 
 ---
 
-## 2. Current model (round 5 — best, SHIPPED; rounds 6–7 kept it after 7 negatives)
+## 2. Current model (round 8 — rank_xendcg member added; rounds 6–7 were negatives)
 
+- **Round 8 (FIRST POSITIVE in 8 rounds — SHIPPED).** The official metric is a
+  per-online-step *ranking*, but the 4 base GBTs train **pointwise** (binary BCE)
+  — an objective mismatch. A LightGBM **`rank_xendcg`** booster grouped by online
+  step (`scripts/train_rank2.py --xendcg`, `model_033_xendcg`) optimises that
+  ranking directly. Standalone VAL 0.5955 (rank-corr 0.459 to shipped) — weaker
+  alone but it **lifts both VAL honest halves AND the OOS reduced test across the
+  whole weight grid** (the gate prior members failed). Integrated as a **5th base
+  GBT** (`SB_RANK_GW=0.15`): the frozen booster is base64-embedded like the GRUs,
+  and `train()` writes a `rank_const.npz` that rescales its score onto the GBT
+  logit scale. Full-pipeline retrain → **reduced OOS 0.5600→0.5606**, determinism
+  **PASS @1e-8**, pure LightGBM (zero new deps). Lambdarank (trunc=200) was
+  rejected first — most decorrelated member ever (rank-corr 0.007) but halfB
+  declined (NDCG truncation is top-heavy, misaligned with uniform-pair AUC);
+  `rank_xendcg`'s smooth listwise loss fixed it. Gain is small (+0.0006) but
+  **robust and banked** — the per-series inputs remain saturated (§7).
 - **Held-out VAL TS-AUC = 0.6160** (2000-series internal split) — a flat tie with
   round-4's 0.6161 (the neural sub-ensemble is **saturated**; see below), up from
   round-3's 0.6041 and the EWMA baseline 0.4806 (**+13.5 pts**). Still **clears the

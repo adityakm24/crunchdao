@@ -22,6 +22,10 @@ features/val_seq_logits*.npz
 features/val_cnn_logits.npz
 features/val_et_logits.npz
 features/val_tsfm_probe.npz
+features/val_rank_logits*.npz
+
+# deploy local-test prediction output (regenerated every crunch test / infer)
+structural-break-real-time-chinchilla/prediction/
 
 # round-7 negative-result: local-only TSFM weights (Chronos-T5-mini, 78MB,
 # downloaded via curl; NOT bundled into the cloud submission — serving stays

@@ -82,6 +82,10 @@ a LightGBM `feval` callback every iteration without dominating training time.
 | reject: TSFM sup. head | `eda_tsfm_head.py` logistic on 1152-dim [cum−hist, trail−hist, trail−early], grouped 5-fold CV | head AUC **~0.515**, blend **+0.0008–0.0011**, rank-corr **0.40–0.52** | ✗ tiny signal is **already captured** by the shipped stack (redundant, not orthogonal) |
 | reject: TSFM mean-pool | `eda_tsfm_mean.py` length-bucketed exact mean-pooling, re-run distance + head | distance lift **+0.0000–0.0003**; head AUC **0.49–0.50**, lift **+0.0000** | ✗ even flatter than EOS — flat across {distance,supervised}×{EOS,mean} |
 | **SHIPPED stays model_029** | round 7 = TSFM negative; Chronos embedding tiny AND redundant | **0.6160** | ✓ **keep round-5; saturation confirmed across 7 signal classes** |
+| **R8 — round 8: metric-aligned RANK objective — the FIRST POSITIVE in 8 rounds** | | | |
+| reject: lambdarank | `train_rank2.py` LightGBM lambdarank grouped by online-step on v4 feats, trunc=200 (model_032_rank) | standalone **0.5833**; rank-corr to shipped **0.007** (most decorrelated member EVER) | ✗ honest-halves gate FAILS — halfB declines monotonically (NDCG truncation is top-heavy, misaligned with uniform-pair AUC) |
+| **accept: rank_xendcg** | `train_rank2.py --xendcg` (model_033_xendcg), listwise CE objective, best_iter 74 | standalone **0.5955**, rank-corr **0.459**; VAL **both halves up** (min +0.0003 @w0.05); **OOS reduced 0.5600→0.5606** across the WHOLE weight grid, both integration paths | ✓ **first member to pass VAL halves AND OOS reduced — xendcg's smooth listwise loss fixes lambdarank's instability** |
+| **model_033 shipped** | round-5 stack + **rank_xendcg as a 5th base GBT** (gw=0.15), frozen booster embedded, `rank_const.npz` rescale computed at train() | reduced OOS **0.5606** (+0.0006), full-pipeline retrain, **determinism PASS @1e-8** | ✓ **round-8 SHIPPED — pure LightGBM, zero new deps; first banked gain since round 5** |
 
 
 **Round-5 verdict — the neural sub-ensemble is SATURATED at ~0.6161.** Full-VAL is
