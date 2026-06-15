@@ -50,6 +50,8 @@ def main() -> None:
     ap.add_argument("--lr", type=float, default=0.03)
     ap.add_argument("--min-data", type=int, default=1000)
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--no-logt", action="store_true",
+                    help="also drop log_t (cross-sectional length leakage, round 9b)")
     args = ap.parse_args()
 
     params = dict(
@@ -71,10 +73,12 @@ def main() -> None:
         verbosity=-1,
     )
 
+    drop = set(DEFAULT_DROP) | ({"log_t"} if args.no_logt else set())
+
     d = np.load(FEATURES, allow_pickle=True)
     X, y, sid, t_online = d["X"], d["y"], d["series_id"], d["t_online"]
     names = [str(n) for n in d["feature_names"]]
-    keep_idx = [i for i, n in enumerate(names) if n not in DEFAULT_DROP]
+    keep_idx = [i for i, n in enumerate(names) if n not in drop]
     keep_names = [names[i] for i in keep_idx]
     X = X[:, keep_idx]
     print(f"X={X.shape} pos_rate={y.mean():.4f}  using {len(keep_names)} feats  "

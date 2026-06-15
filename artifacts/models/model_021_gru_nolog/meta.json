@@ -1,0 +1,9 @@
+{
+  "val_ts_auc": 0.601,
+  "arch": "gru",
+  "hidden": 96,
+  "epochs": 40,
+  "best_epoch": 6,
+  "n_features": 151,
+  "parity_maxdiff": 6.563068986054077e-07
+}

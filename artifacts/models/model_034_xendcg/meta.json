@@ -1,0 +1,8 @@
+{
+  "model_id": "model_034_xendcg",
+  "objective": "rank_xendcg",
+  "trunc": 200,
+  "n_features": 151,
+  "best_iter": 65,
+  "val_ts_auc": 0.59448
+}

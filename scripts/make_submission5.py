@@ -40,19 +40,20 @@ SEQ_DIRS = os.environ.get(
     "SB_SEQ_DIRS",
     os.environ.get(
         "SB_GRU_DIRS",
-        "artifacts/models/model_020_gru,artifacts/models/model_021_gru,"
-        "artifacts/models/model_022_gru",
+        "artifacts/models/model_020_gru_nolog,artifacts/models/model_021_gru_nolog,"
+        "artifacts/models/model_022_gru_nolog",
     ),
 ).split(",")
 
 W_LIN = float(os.environ.get("SB_W_LIN", "0.2"))   # logistic weight within base
-W_GRU = float(os.environ.get("SB_W_GRU", "0.40"))  # neural-member weight vs base
+W_GRU = float(os.environ.get("SB_W_GRU", "0.45"))  # neural-member weight vs base
 
 # Round-8 metric-aligned member: a LightGBM rank_xendcg booster grouped by online
-# step (model_033_xendcg). Frozen + embedded like the neural members; mixed into
-# the GBT base mean as a 5th member (rescaled to GBT-logit scale). Validated:
-# +0.0006 OOS reduced, both VAL honest halves up across the whole weight grid.
-RANK_DIR = os.environ.get("SB_RANK_DIR", "artifacts/models/model_033_xendcg")
+# step. Frozen + embedded like the neural members; mixed into the GBT base mean as
+# a 5th member (rescaled to GBT-logit scale). Round 9b retrained log_t-free
+# (model_034_xendcg, 151 feats). Validated: +0.0006 OOS reduced as a member; the
+# log_t drop across all members is the +0.0203 OOS win.
+RANK_DIR = os.environ.get("SB_RANK_DIR", "artifacts/models/model_034_xendcg")
 RANK_GW = float(os.environ.get("SB_RANK_GW", "0.15"))  # rank weight inside GBT mean
 
 
@@ -232,7 +233,7 @@ WRAPPER = '''
 # Competition interface
 # ----------------------------------------------------------------------------
 _DEFAULT_DROP = {
-    "t", "log_n_hist", "chi2_cum", "online_acf2", "acf2_diff",
+    "t", "log_t", "log_n_hist", "chi2_cum", "online_acf2", "acf2_diff",
     "w25_chi2", "w50_chi2", "w100_chi2", "w200_chi2", "w400_chi2",
 }
 _NAME_SET = set(FEATURE_NAMES)

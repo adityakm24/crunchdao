@@ -89,6 +89,12 @@ a LightGBM `feval` callback every iteration without dominating training time.
 | **R9 — round 9: step-conditional feature standardization — VAL mirage, OOS reject** | | | |
 | reject: stepnorm | `eda_stepnorm.py`/`reduced_stepnorm.py`: per-online-step cross-sectional NULL (y==0) mean/std baked from TRAIN, smoothed over t; `x→(x−μ₀(t))/σ₀(t)`. Single GBT, same split | VAL full **0.5928→0.6013 (+0.0085)** but halves **asymmetric** (halfA +0.0006 / halfB +0.0159); **OOS reduced 0.5495→0.5457 (−0.0038)** | ✗ **cross-series population leakage** — μ₀(t)/σ₀(t) encode TRAIN series composition (top feat `log_t`=absolute position); transfers on VAL (same id-pool), miscalibrated on OOS. VAL lift was a mirage; OOS gate caught it. Feature-normalization avenue CLOSED |
 | **SHIPPED stays model_033** | round 9 = stepnorm OOS-rejected; confirms any train-cross-sectional transform fails OOS | **(OOS 0.5606)** | ✓ **keep round-8; cross-series-population standardization added to the do-not-retry list** |
+| **R9b — round 9b: drop `log_t` everywhere — THE BIGGEST OOS WIN IN THE PROJECT** | | | |
+| diagnosis | stepnorm autopsy fingered `log_t = log(n_hist+online_step)` (the #1 feature): at a fixed online-step it varies **only with history length** = pure cross-sectional length signal; re-added round 1 (a VAL jump) **before the OOS harness existed**, never OOS-gated → prime driver of the VAL 0.616 vs OOS 0.560 gap | — | the leaky feature hiding in plain sight |
+| ablation: drop log_t | `reduced_droppos.py` single GBT, same 80% split, stream reduced OOS once: baseline VAL 0.5928 / halfA 0.5990 / halfB 0.5864 / **OOS 0.5495**; **drop log_t** → halfA 0.5806 / halfB 0.5811 (**symmetric!**) / **OOS 0.5620 (+0.0125)**; drop log_t+t_over_nhist → OOS 0.5530 | **OOS +0.0125, halves symmetric** | ✓ **drop `log_t` ONLY** — `t_over_nhist` (relative position) transfers, **keep it**; symmetric halves = robustness signature (inverse of stepnorm) |
+| blend confirm | `reduced_nolog.py` reconstructs ramp weights from cache, 4 GBTs with vs without log_t (logistic+GRUs held fixed, rank gw=0): mean4 0.5518→0.5656, base blend **0.5600→0.5768** | GBTs-only +0.0168 | ✓ confirms at the blend level before full retrain |
+| retrain members | rank → `model_034_xendcg` (151 feats, val 0.5945); 3 GRUs → `model_02{0,1,2}_gru_nolog` (151 feats, VAL 0.6066/0.6010/0.5948) | members re-fit clean | ✓ all members log_t-free |
+| **model_034 shipped** | full `local_test.py` retrain: rank model_034 + 3 nolog GRUs + generator `_DEFAULT_DROP += log_t` (4 GBTs + logistic) | **reduced OOS 0.5606→0.5809 (+0.0203)**, train 603 s, infer 36 s (~59 min/10k ≪ 15 h), **determinism PASS @1e-8** | ✓ **round-9b SHIPPED — ~34× the rank member; biggest validated jump in the project; zero new deps** |
 
 
 **Round-5 verdict — the neural sub-ensemble is SATURATED at ~0.6161.** Full-VAL is
@@ -481,3 +487,13 @@ The remaining gap is small but real; GBT ensembling is exhausted (correlations
   versions carry cross-sectional rank signal.
 - **LRV-calibrated cumulative detectors (v5, model_019 = 0.5879)** — redundant
   with the AR(1)-prewhitened bank; adds noise. (idea #1 in the old list — tried.)
+- **Step-conditional / cross-sectional-population standardization** (round 9
+  stepnorm) — baking train per-step null μ/σ leaks the train population; VAL
+  mirage (+0.0085), OOS regresses (−0.0038). Any transform encoding train
+  cross-sectional structure fails OOS.
+- **`log_t` (and any absolute-position/length feature)** — REMOVED round 9b.
+  At a fixed online-step it varies only with history length = a pure
+  cross-sectional length signal that does not transfer (OOS +0.0203 once
+  dropped from every member). **Lesson: any feature whose value at a fixed
+  online-step depends on absolute position/length must be OOS-gated; prefer
+  relative-position features like `t_over_nhist`.**

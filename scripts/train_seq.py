@@ -135,6 +135,8 @@ def main() -> None:
                     help="output dir for gru.npz/meta.json")
     ap.add_argument("--val-out", default="features/val_seq_logits.npz",
                     help="where to cache the VAL neural logit")
+    ap.add_argument("--no-logt", action="store_true",
+                    help="also drop log_t (cross-sectional length leakage, round 9b)")
     args = ap.parse_args()
     out_dir = args.out
     val_out = args.val_out
@@ -154,7 +156,9 @@ def main() -> None:
     d = np.load(args.features, allow_pickle=True)
     X, y, sid, t = d["X"], d["y"], d["series_id"], d["t_online"]
     names = [str(n) for n in d["feature_names"]]
-    drop = set() if args.raw else DROP
+    drop = set() if args.raw else set(DROP)
+    if args.no_logt:
+        drop = drop | {"log_t"}
     keep = [i for i, n in enumerate(names) if n not in drop]
     keep_names = [names[i] for i in keep]
     F = len(keep)

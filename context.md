@@ -34,7 +34,7 @@ Consequences that drove every design decision:
 
 ---
 
-## 2. Current model (round 8 — rank_xendcg member added; round 9 was a negative)
+## 2. Current model (round 9b — `log_t` leak removed, the biggest OOS win yet)
 
 - **Round 8 (FIRST POSITIVE in 8 rounds — SHIPPED).** The official metric is a
   per-online-step *ranking*, but the 4 base GBTs train **pointwise** (binary BCE)
@@ -63,6 +63,26 @@ Consequences that drove every design decision:
   miscalibrated on OOS (ids≥10000, different length/composition) — **cross-series
   population leakage**. The OOS gate caught a pure VAL mirage; *any* transform that
   bakes in train cross-sectional structure is now on the do-not-retry list.
+- **Round 9b (THE BIG WIN — `log_t` removed everywhere, SHIPPED).** The stepnorm
+  autopsy exposed the real culprit: `log_t = log(n_hist + online_step)` was the #1
+  feature, but at a fixed online-step it varies **only with history length** — a
+  pure cross-sectional *length* signal that encodes the train population's
+  (length ↔ break) correlation and **does not transfer**. It was re-added back in
+  round 1 (a VAL jump) *before the OOS reduced harness existed*, so it had never
+  been OOS-validated — and it was the **prime driver of the VAL 0.616 vs OOS 0.560
+  gap**. Ablation (`scripts/reduced_droppos.py`) was decisive: dropping `log_t`
+  alone moved single-GBT OOS **0.5495→0.5620 (+0.0125)** *and* made the VAL honest
+  halves **symmetric** (gap 0.0126→0.0005) — the exact inverse of stepnorm's
+  non-robust signature. `t_over_nhist` (relative position) transfers fine and is
+  **kept**. Removing `log_t` from **all** members (4 GBTs + logistic via
+  `_DEFAULT_DROP`; rank retrained → `model_034_xendcg`; the 3 GRUs retrained →
+  `model_02{0,1,2}_gru_nolog`) lifts the full blend on the OOS reduced test from
+  **0.5606 → 0.5809 (+0.0203)** — ~34× the rank member's gain and the single
+  biggest validated jump in the project. `local_test.py` full retrain confirms it,
+  determinism **PASS @1e-8**, infer ~59 min/10k (≪ 15 h budget), pure LightGBM +
+  embedded numpy GRUs (zero new deps). **Lesson banked: any feature whose value at a
+  fixed online-step depends on absolute position/length leaks the train
+  cross-section and must be OOS-gated.**
 
   round-4's 0.6161 (the neural sub-ensemble is **saturated**; see below), up from
   round-3's 0.6041 and the EWMA baseline 0.4806 (**+13.5 pts**). Still **clears the
