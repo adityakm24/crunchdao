@@ -21,6 +21,12 @@ features/val_base_logits.npz
 features/val_seq_logits*.npz
 features/val_cnn_logits.npz
 features/val_et_logits.npz
+features/val_tsfm_probe.npz
+
+# round-7 negative-result: local-only TSFM weights (Chronos-T5-mini, 78MB,
+# downloaded via curl; NOT bundled into the cloud submission — serving stays
+# pure-numpy). torch/chronos are local-only too (never in cloud requirements).
+models/
 
 # round-6 negative-result heavy artifact: ExtraTrees joblib (252MB, reproducible
 # via scripts/finalize_et.py — keep only meta.json under version control)

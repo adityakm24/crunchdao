@@ -77,6 +77,11 @@ a LightGBM `feval` callback every iteration without dominating training time.
 | reject: windowed filters | `eda_window.py` edge/varenv/acfenv/transient/ramp matched filters at L=20/40/80/160 | best acfenv80 **+0.0017**, weight **0.00** | ✗ linear shape filters near-dead vs shipped |
 | reject: 1D-CNN (raw) | `train_cnn.py` causal dilated CNN over raw z-stream, R=63: **1-ch** (32ch, std 0.5191) + **3-ch** z,z²,\|z\| (48ch, std 0.5212) | blend onto shipped **flat→declining** every Wc (0.6160→0.6142), both halves down | ✗ most decorrelated member ever (rank-corr **0.77**) but tops out ~0.52 standalone — below the lift threshold |
 | **SHIPPED stays model_029** | round 6 = thorough negative-results round; no member beats VAL 0.6160 | **0.6160** | ✓ **keep round-5; saturation confirmed across 6 signal classes** |
+| **R7 — round 7: TSFM embedding member (Chronos-T5-mini) — the 7th negative** | | | |
+| reject: TSFM distance | `eda_tsfm.py` Chronos-T5-mini (384-dim) embed hist vs cum/trail; cosine/L2, EOS-token pooling, 6 snapshots | all features **~0.50** standalone, max blend lift **+0.0018** | ✗ a single distance scalar discards the embedding's directional info |
+| reject: TSFM sup. head | `eda_tsfm_head.py` logistic on 1152-dim [cum−hist, trail−hist, trail−early], grouped 5-fold CV | head AUC **~0.515**, blend **+0.0008–0.0011**, rank-corr **0.40–0.52** | ✗ tiny signal is **already captured** by the shipped stack (redundant, not orthogonal) |
+| reject: TSFM mean-pool | `eda_tsfm_mean.py` length-bucketed exact mean-pooling, re-run distance + head | distance lift **+0.0000–0.0003**; head AUC **0.49–0.50**, lift **+0.0000** | ✗ even flatter than EOS — flat across {distance,supervised}×{EOS,mean} |
+| **SHIPPED stays model_029** | round 7 = TSFM negative; Chronos embedding tiny AND redundant | **0.6160** | ✓ **keep round-5; saturation confirmed across 7 signal classes** |
 
 
 **Round-5 verdict — the neural sub-ensemble is SATURATED at ~0.6161.** Full-VAL is
