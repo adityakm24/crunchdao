@@ -34,7 +34,7 @@ Consequences that drove every design decision:
 
 ---
 
-## 2. Current model (round 8 — rank_xendcg member added; rounds 6–7 were negatives)
+## 2. Current model (round 8 — rank_xendcg member added; round 9 was a negative)
 
 - **Round 8 (FIRST POSITIVE in 8 rounds — SHIPPED).** The official metric is a
   per-online-step *ranking*, but the 4 base GBTs train **pointwise** (binary BCE)
@@ -51,7 +51,19 @@ Consequences that drove every design decision:
   declined (NDCG truncation is top-heavy, misaligned with uniform-pair AUC);
   `rank_xendcg`'s smooth listwise loss fixed it. Gain is small (+0.0006) but
   **robust and banked** — the per-series inputs remain saturated (§7).
-- **Held-out VAL TS-AUC = 0.6160** (2000-series internal split) — a flat tie with
+- **Round 9 (negative — ships nothing, keeps `model_033`).** Tested
+  **step-conditional feature standardization**: bake `μ₀(t)/σ₀(t)` = per-online-step
+  cross-sectional NULL (y==0) mean/std from TRAIN, smoothed over `t`, and transform
+  `x→(x−μ₀(t))/σ₀(t)` as an O(1) serve-time `t`-lookup. VAL looked spectacular
+  (**0.5928→0.6013, +0.0085 — the biggest single VAL lift in 9 rounds**) but the
+  halves were **asymmetric** (halfA +0.0006 / halfB +0.0159) and the **OOS reduced
+  test regressed (0.5495→0.5457, −0.0038)**. Root cause: `μ₀(t)/σ₀(t)` encode the
+  *train* cross-sectional composition (the #1 normalised feature is `log_t`, an
+  absolute-position signal), so they transfer on VAL (same id-pool) but are
+  miscalibrated on OOS (ids≥10000, different length/composition) — **cross-series
+  population leakage**. The OOS gate caught a pure VAL mirage; *any* transform that
+  bakes in train cross-sectional structure is now on the do-not-retry list.
+
   round-4's 0.6161 (the neural sub-ensemble is **saturated**; see below), up from
   round-3's 0.6041 and the EWMA baseline 0.4806 (**+13.5 pts**). Still **clears the
   leaderboard top-10 cutoff (~0.6135)** on the internal split.
