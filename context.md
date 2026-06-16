@@ -57,10 +57,16 @@ Consequences that drove every design decision:
   but washes out at the blend (the GRU already encodes step structure); a joint
   meta-stacker (0.6160) *underperforms* the nested hand blend; the with-`log_t`
   rank (model_033) and lambdarank (model_032, corr −0.05 — nearly orthogonal!)
-  don't beat the shipped nolog rank. **Conclusion: cached-member re-blending is at
-  ceiling ~0.6170 VAL ≈ 0.600 real — this round RECOVERS the regression and matches
-  the prior best; a *drastic* jump needs genuinely new per-series signal (§7), not
-  re-blending.** Generator defaults updated; determinism unaffected; pure deps.
+  don't beat the shipped nolog rank. A final round-10 probe added the only two
+  unrepresented signal families — **spectral/FFT** and **entropy/complexity**
+  (`scripts/val_spectral_probe.py`) — with an honest cross-half test on 25,194
+  VAL probe points (all 2000 VAL series): both halves got worse when augmented
+  (−0.0047 / −0.0120), so they are not usable signal at this stage. **Conclusion:
+  cached-member re-blending is at ceiling ~0.6170 VAL ≈ 0.600 real, and the
+  per-series signal space now looks saturated in practice.** This round recovers
+  the regression and matches prior best. Recovery package submitted to Crunch on
+  2026-06-16; awaiting leaderboard score. Generator defaults updated;
+  determinism unaffected; pure deps.
 
 - **Round 8 (FIRST POSITIVE in 8 rounds — SHIPPED).** The official metric is a
   per-online-step *ranking*, but the 4 base GBTs train **pointwise** (binary BCE)

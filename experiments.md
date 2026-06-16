@@ -103,7 +103,9 @@ a LightGBM `feval` callback every iteration without dominating training time.
 | reject: stepnorm (blend) | `val_stepnorm_blend.py`: single-GBT +0.0051 but the GRU already encodes step structure | blend final **+0.0010** (halfA −0.0008) | ✗ washes out at the blend |
 | reject: meta-stacker | `val_stack.py` honest cross-half ridge stack of all 8 members | **0.6160 < 0.6170** hand blend | ✗ nested hand structure generalizes better |
 | reject: rank upgrades | `val_rank_ensemble.py`: m033 (xendcg+log_t, 0.5955), m032 (lambdarank, corr −0.05) + ensembles | none beat shipped m034 @ gw0.10 | ✗ rank member also at ceiling |
+| reject: spectral + entropy new-signal probe | `val_spectral_probe.py` adds FFT spectral entropy/centroid/band-ratio + permutation entropy (causal hist-vs-online contrasts), honest cross-half logistic on top of shipped blend, **all 2000 VAL series**, 25,194 probe points | standalone AUCs near 0.5; honest deltas **−0.0047 / −0.0120** (min-half −0.0120) | ✗ no robust incremental signal; per-series space appears saturated |
 | **model_035 shipped** | restore `log_t` + W_LIN 0.10 + RANK_GW 0.10; nolog GRU/rank unchanged | **VAL 0.6170 (~0.600 real)** — recovers #6 regression, ≈ prior best | ✓ **round-10 SHIPPED — cached re-blend ceiling; drastic needs NEW signal** |
+| crunch submission (2026-06-16) | `uv run crunch push` from deploy dir with round-10 recovery package (main.py + resources) | upload completed successfully; run accepted client-side | ✓ submitted; awaiting public leaderboard score |
 
 
 **Round-5 verdict — the neural sub-ensemble is SATURATED at ~0.6161.** Full-VAL is
