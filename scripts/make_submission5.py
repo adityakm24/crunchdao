@@ -45,16 +45,24 @@ SEQ_DIRS = os.environ.get(
     ),
 ).split(",")
 
-W_LIN = float(os.environ.get("SB_W_LIN", "0.2"))   # logistic weight within base
+# Round-10 retune: the real leaderboard proved VAL (2000 series) tracks the public
+# score and the 100-series reduced test is noise. A full VAL blend search (full +
+# both honest halves) + an honest cross-half meta-stacker found the logistic was
+# OVERWEIGHTED (it even earns a negative stack weight; corr 0.93 with the GBTs) and
+# the rank member slightly overweighted. W_LIN 0.2->0.1, RANK_GW 0.15->0.10 lifts
+# VAL 0.6166->0.6170 with both halves up. (GRU weight W_GRU=0.45 stayed optimal.)
+W_LIN = float(os.environ.get("SB_W_LIN", "0.1"))   # logistic weight within base
 W_GRU = float(os.environ.get("SB_W_GRU", "0.45"))  # neural-member weight vs base
 
 # Round-8 metric-aligned member: a LightGBM rank_xendcg booster grouped by online
 # step. Frozen + embedded like the neural members; mixed into the GBT base mean as
-# a 5th member (rescaled to GBT-logit scale). Round 9b retrained log_t-free
-# (model_034_xendcg, 151 feats). Validated: +0.0006 OOS reduced as a member; the
-# log_t drop across all members is the +0.0203 OOS win.
+# a 5th member (rescaled to GBT-logit scale). The rank member is the diversity gold
+# of the blend (corr ~0.42 with the GBTs, the lowest of any member). Trained log_t-
+# free (model_034_xendcg, 151 feats); the recurrent members are likewise nolog
+# (nolog GRU 0.6072 VAL > withlog GRU 0.6048) -- but the GBTs/logistic KEEP log_t
+# (round-10 finding below). RANK_GW 0.10 is the VAL-tuned weight.
 RANK_DIR = os.environ.get("SB_RANK_DIR", "artifacts/models/model_034_xendcg")
-RANK_GW = float(os.environ.get("SB_RANK_GW", "0.15"))  # rank weight inside GBT mean
+RANK_GW = float(os.environ.get("SB_RANK_GW", "0.10"))  # rank weight inside GBT mean
 
 
 HEADER = '''"""ADIA Lab Structural Break Real-Time — self-contained submission (round 5).
@@ -232,8 +240,13 @@ WRAPPER = '''
 # ----------------------------------------------------------------------------
 # Competition interface
 # ----------------------------------------------------------------------------
+# Round-10 correction: log_t is KEPT for the GBTs/logistic. Submission #6 dropped
+# it on the strength of the 100-series reduced-OOS test (+0.0203 there) and the
+# real public score REGRESSED 0.5987 -> 0.5959. VAL (2000 series) had said log_t
+# HELPS (-0.012 if dropped) and the leaderboard agreed -> VAL is the trustworthy
+# gate; the 100-series reduced test is noise. log_t restored here.
 _DEFAULT_DROP = {
-    "t", "log_t", "log_n_hist", "chi2_cum", "online_acf2", "acf2_diff",
+    "t", "log_n_hist", "chi2_cum", "online_acf2", "acf2_diff",
     "w25_chi2", "w50_chi2", "w100_chi2", "w200_chi2", "w400_chi2",
 }
 _NAME_SET = set(FEATURE_NAMES)

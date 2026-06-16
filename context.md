@@ -34,7 +34,33 @@ Consequences that drove every design decision:
 
 ---
 
-## 2. Current model (round 9b — `log_t` leak removed, the biggest OOS win yet)
+## 2. Current model (round 10 — `log_t` restored, regression fixed, blend re-tuned)
+
+- **Round 10 (METHODOLOGY CORRECTION — the gate was inverted; SHIPPED).** The
+  real public leaderboard exposed a costly error: round 9b dropped `log_t` on the
+  strength of the **OOS reduced** test (+0.0203 there) — but that test is the
+  official `X_test.reduced`, **only 100 series**, too small and compositionally
+  biased. Submission #6 (log_t dropped) **REGRESSED the real public score
+  0.5987 → 0.5959**. **VAL (2000 held-out train series) had said the opposite all
+  along — `log_t` HELPS (~+0.012 single-GBT) — and the full hidden test agreed.**
+  So the multi-round belief "OOS reduced is the truth, VAL halves lie" is
+  **inverted**: VAL is the representative gate (real ≈ VAL − 0.018, a consistent
+  offset); reduced-100 is noise. Fix: **`log_t` restored** for the GBTs + logistic
+  (recovers the regression). Then an exhaustive VAL re-optimisation (full +
+  series-disjoint honest halves) of the blend: `scripts/val_blend_search.py`
+  (weights), `scripts/val_stack.py` (meta-stacker), `scripts/val_rank_ensemble.py`
+  (rank upgrades), `scripts/val_stepnorm_blend.py` (stepnorm at blend level). Findings:
+  the **logistic was overweighted** (W_LIN 0.20→0.10; it even earns a *negative*
+  weight in an honest cross-half stack — corr 0.93 with the GBTs), and rank was
+  slightly heavy (RANK_GW 0.15→0.10). Net VAL 0.6166→**0.6170**, both halves up.
+  **Everything else hit the same ceiling**: stepnorm lifts a single GBT (+0.0051)
+  but washes out at the blend (the GRU already encodes step structure); a joint
+  meta-stacker (0.6160) *underperforms* the nested hand blend; the with-`log_t`
+  rank (model_033) and lambdarank (model_032, corr −0.05 — nearly orthogonal!)
+  don't beat the shipped nolog rank. **Conclusion: cached-member re-blending is at
+  ceiling ~0.6170 VAL ≈ 0.600 real — this round RECOVERS the regression and matches
+  the prior best; a *drastic* jump needs genuinely new per-series signal (§7), not
+  re-blending.** Generator defaults updated; determinism unaffected; pure deps.
 
 - **Round 8 (FIRST POSITIVE in 8 rounds — SHIPPED).** The official metric is a
   per-online-step *ranking*, but the 4 base GBTs train **pointwise** (binary BCE)
@@ -63,7 +89,12 @@ Consequences that drove every design decision:
   miscalibrated on OOS (ids≥10000, different length/composition) — **cross-series
   population leakage**. The OOS gate caught a pure VAL mirage; *any* transform that
   bakes in train cross-sectional structure is now on the do-not-retry list.
-- **Round 9b (THE BIG WIN — `log_t` removed everywhere, SHIPPED).** The stepnorm
+- **Round 9b (LOOKED like the big win on reduced-OOS — but REGRESSED the real
+  leaderboard; REVERTED in round 10).** ⚠️ The reduced-OOS test (100 series) said
+  dropping `log_t` everywhere gained +0.0203; the **real public score fell
+  0.5987 → 0.5959**. See round 10 above for the corrected methodology. The autopsy
+  *reasoning* below was plausible but the **gate was wrong** — VAL (which said
+  `log_t` helps) was right. Kept for the record. The stepnorm
   autopsy exposed the real culprit: `log_t = log(n_hist + online_step)` was the #1
   feature, but at a fixed online-step it varies **only with history length** — a
   pure cross-sectional *length* signal that encodes the train population's
