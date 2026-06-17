@@ -68,6 +68,35 @@ Consequences that drove every design decision:
   2026-06-16; awaiting leaderboard score. Generator defaults updated;
   determinism unaffected; pure deps.
 
+- **Round 11 (synthetic augmentation REJECTED; causal-Transformer member = first
+  positive lever since round 8 — NOT yet shipped).** Two avenues. **(a) DGP-matched
+  synthetic augmentation** (`scripts/gen_synth.py`, AR(1)+Student-t tuned to the
+  measured DGP fingerprint, realism classifier AUC 0.943): lifts a *single* GBT
+  strongly (+0.0088–0.0112 full-VAL, both seeds) but **washes out at the blend**
+  (`scripts/aug_base_blend.py`: blend Δ full +0.0002, halves split +0.0025/−0.0024),
+  and the same for a GRU (aug 0.5994 < ctrl 0.6009). Root cause: the 4 GBTs are
+  0.97–0.99 correlated, so the blend's strength is **decorrelation** (the GRU at 45%
+  + the rank member), not base accuracy — improving mutually-redundant members
+  cannot move a blend whose residual is dominated by the decorrelated members.
+  **Augmentation is not shippable.** **(b) A causal self-attention member**
+  (`scripts/train_attn.py`) — the one evidence-integration mechanism never tried
+  (GRU/LSTM/CNN/TCN/TSFM all saturated). A `TransformerEncoder` (norm_first, gelu)
+  over the 151 calibrated features with a **causal mask + key-padding and NO
+  positional encoding** (the relative-position features + causal mask supply order;
+  absolute position is the documented time-trap), per-step BCE+ramp, best-VAL-epoch
+  select. Three seeds: standalone **0.59** each, **rank-corr 0.83–0.84 to the GRU
+  mean** — genuinely decorrelated, exactly the round-4 GRU signature. The
+  weight-search gate (`scripts/attn_blend_search.py`, pure-numpy on cached logits,
+  honest full + both halves) shows a **2-seed sub-ensemble lifts VAL 0.6170 →
+  0.6192 (+0.0022), both honest halves up** — the first validated blend lift since
+  round 8. **Seed-averaging tradeoff:** more seeds raise standalone (0.5903 →
+  0.5973) but *increase* correlation to the GRU (0.841 → 0.869) and shrink the lift;
+  2 seeds is the sweet spot. Rules verified (deep-learning + FM methodologies are
+  explicitly sanctioned; deploy via numpy KV-cache forward or torch-in-requirements
+  + frozen weights). The lift is **real but small (~+0.002 VAL ≈ +0.002 real), not
+  drastic** — pushing the single-model standalone (longer context + regularization)
+  is the open lever. **Not yet submitted.**
+
 - **Round 8 (FIRST POSITIVE in 8 rounds — SHIPPED).** The official metric is a
   per-online-step *ranking*, but the 4 base GBTs train **pointwise** (binary BCE)
   — an objective mismatch. A LightGBM **`rank_xendcg`** booster grouped by online
@@ -354,6 +383,34 @@ top-10 cutoff on VAL). Structural reasons the metric stays hard:
 **0.6161** on VAL (top-10 territory); closing the gap to #1 needs either a
 stronger sequence model (temporal CNN/Transformer or a TSFM drift embedding) or a
 per-break-type expert for the subtle-break majority.
+
+> **Round 11 update on this line.** The "stronger sequence model (Transformer)"
+> path has now been tried (`scripts/train_attn.py`): a causal self-attention member
+> *is* genuinely decorrelated (rank-corr 0.83) and *does* lift the blend (+0.0022
+> VAL, both honest halves), the first validated lift since round 8 — but the
+> magnitude is small (~+0.002), not the ~+0.03 needed for #1. So a different
+> architecture helps at the margin but does **not** by itself close the gap; the
+> ~0.6322 frontier still implies either a materially stronger single-model
+> standalone or a different label/cross-series structure. Augmentation (round 11a)
+> was rejected: it lifts single models but washes out at the blend.
+
+> **Round 11b — the INPUT-representation hypothesis, tested and closed.** The note
+> above says "input-bottlenecked"; round 11b attacked that directly by feeding the
+> sequence model genuinely different inputs instead of the 151 calibrated features:
+> the raw z-trajectory (`build_raw_stream.py`), a **distribution-free PIT trajectory**
+> `pit=F̂(xₜ)` (`build_pit_stream.py`, aimed squarely at the 68% subtle non-Gaussian
+> breaks), and a combined 10-channel detector. Results were consistent and negative:
+> raw-z *concat* onto the calibrated features is redundant (0.5877, rank-corr rises
+> to 0.847); the pure learned detectors are decorrelated but too weak standalone
+> (PIT-only **0.5399**, raw+PIT **~0.55**). The PIT member is the **most orthogonal
+> member ever built** (rank-corr 0.76 to *both* the GRU and the calib-attention) yet
+> the honest weight search zeroes it out — orthogonal *noise* can't lift a blend, you
+> need orthogonal *signal*. This is the fifth consistent confirmation (model_028,
+> round-6 CNN, raw-concat, PIT, raw+PIT) that the ceiling is **information, not
+> representation**: the subtle majority sits at the genuine two-sample detection
+> floor (KS≈0.12), and no input transform extracts signal that isn't statistically
+> present. The banked +0.0022 calib-attention member remains the only validated R11
+> lever.
 
 ---
 

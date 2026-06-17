@@ -137,6 +137,9 @@ def main() -> None:
                     help="where to cache the VAL neural logit")
     ap.add_argument("--no-logt", action="store_true",
                     help="also drop log_t (cross-sectional length leakage, round 9b)")
+    ap.add_argument("--synth", default="",
+                    help="optional synth feature npz appended to TRAIN ONLY "
+                         "(VAL stays 100%% real); same schema as --features")
     args = ap.parse_args()
     out_dir = args.out
     val_out = args.val_out
@@ -164,8 +167,22 @@ def main() -> None:
     F = len(keep)
     print(f"X={X.shape} -> using {F} features (raw={args.raw})")
 
+    # VAL mask on the REAL series ONLY (exact same 2000 held-out series); any
+    # synthetic series are TRAIN-only so the gate stays 100%% real & comparable.
     va = val_mask(sid)
-    # series boundaries (matrix is sorted by (sid, t))
+    if args.synth:
+        s = np.load(args.synth, allow_pickle=True)
+        assert [str(n) for n in s["feature_names"]] == names, "synth schema mismatch"
+        nx = X.shape[0]
+        X = np.concatenate([X, s["X"]], axis=0)
+        y = np.concatenate([y, s["y"]])
+        sid = np.concatenate([sid, s["series_id"]])
+        t = np.concatenate([t, s["t_online"]])
+        va = np.concatenate([va, np.zeros(X.shape[0] - nx, dtype=bool)])
+        print(f"  +synth {args.synth}: appended {X.shape[0]-nx:,} TRAIN rows "
+              f"(synth sids {int(s['series_id'].min())}..{int(s['series_id'].max())})")
+
+    # series boundaries (matrix is sorted by (sid, t); synth sids > all real)
     uniq, start = np.unique(sid, return_index=True)
     bounds = list(start) + [len(sid)]
     series = [(int(start[i]), int(bounds[i + 1])) for i in range(len(uniq))]
