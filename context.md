@@ -34,7 +34,28 @@ Consequences that drove every design decision:
 
 ---
 
-## 2. Current model (round 10 — `log_t` restored, regression fixed, blend re-tuned)
+## 2. Current model (round 11 — causal-attention member SHIPPED, real PB 0.6049)
+
+- **Round 11 (SHIPPED submission #9 — first net-positive ship since round 8).**
+  Added a **causal self-attention** neural member (3-layer Transformer encoder,
+  d128/h8/ff512, norm_first+GELU over the 151 calibrated features, causal mask,
+  per-step BCE), 2-seed mean, as a 4th member of the neural pillar — the first
+  decorrelated new member since the GRU (rank-corr ~0.83 to the GRU mean). Served
+  as an **exact float64-numpy causal KV-cache** (O(t)/step, parity **2.0e-15** vs
+  torch) so the deployed model is bit-identical to what we evaluated; ships
+  torch-free (`scipy.special.erf` for the exact GELU). VAL 0.6170→**0.6187** (full
+  +0.0017, both honest halves up, robust +0.0012); cloud `crunch test` determinism
+  passed @1e-8; ~141 min full test (≪ 15 h). **Real public score = 0.6049**
+  (prior #8 0.5996 → **+0.0053 real**, ≈3× the VAL gain — generalised BETTER on the
+  hidden test than on VAL). **Refines the calibration offset to real ≈ VAL − 0.014**
+  (was −0.018). Gap to #1 (0.6322) narrows to **~0.027**.
+- **Round 11 closed (negative, recorded):** per-break-type MoE (oracle ceiling
+  +0.0009 robust), TSFM fine-tune (monotonic decay), input-stream members
+  (raw-z / PIT / raw+PIT all redundant or sub-0.55), and a **within-step rank-loss
+  attention member** — the latter was the most orthogonal member ever built
+  (rank-corr ~0.00) but an ablation showed its true marginal is +0.0002 full with
+  opposite-sign halves (robust −0.0014): orthogonal *noise*, not signal. The
+  per-series + cross-series search space is exhausted by experiment.
 
 - **Round 10 (METHODOLOGY CORRECTION — the gate was inverted; SHIPPED).** The
   real public leaderboard exposed a costly error: round 9b dropped `log_t` on the

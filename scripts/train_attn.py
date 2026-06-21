@@ -90,6 +90,9 @@ def main():
                     help="extra per-step stream npz (aligned to v4) for --raw concat/only; "
                          "default is the raw z-stream, pass the PIT stream to swap input")
     ap.add_argument("--out", default="features/val_attn_logits.npz")
+    ap.add_argument("--save-weights", default="",
+                    help="if set, dump best-epoch weights+norm+feature-names to this npz "
+                         "for the deterministic numpy serve path (raw none only)")
     args = ap.parse_args()
 
     import torch
@@ -206,6 +209,7 @@ def main():
         return val_pred[va]
 
     best = (-1.0, None, -1)
+    best_state = None
     for ep in range(args.epochs):
         net.train(); t0 = time.time()
         order = train_idx[:]
@@ -258,11 +262,27 @@ def main():
               f"VAL TS-AUC {vauc:.4f}  ({time.time()-t0:.1f}s)", flush=True)
         if vauc > best[0]:
             best = (vauc, vl.copy(), ep)
+            # capture the SAME-epoch weights so served == evaluated (CPU float64).
+            best_state = {k: v.detach().cpu().numpy().copy()
+                          for k, v in net.state_dict().items()}
 
     print(f"\nBest VAL TS-AUC {best[0]:.4f} @ epoch {best[2]}")
     attn = best[1]
     np.savez(args.out, val_logit=attn, series_id=sv, t_online=tv)
     print(f"saved VAL logit -> {args.out}")
+
+    if args.save_weights:
+        assert args.raw == "none", "weight export is wired for raw=none (calibrated feats) only"
+        feat_names = [names[i] for i in keepwork]   # serve maps feats[name_to_col[name]]
+        meta = dict(best_state)
+        meta["__mean"] = mean.astype(np.float64)
+        meta["__scale"] = scale.astype(np.float64)
+        meta["__feature_names"] = np.array(feat_names, dtype="U64")
+        meta["__config"] = np.array(
+            [F, args.dmodel, args.heads, args.layers, ff], dtype=np.int64)
+        np.savez(args.save_weights, **meta)
+        print(f"saved SERVE weights ({len(best_state)} tensors, F={F} d={args.dmodel} "
+              f"L={args.layers} h={args.heads} ff={ff}) -> {args.save_weights}")
 
     # ---- blend gate from CACHED logits (no GBT/GRU retrain) ----
     base = np.load("features/val_base_logits.npz")

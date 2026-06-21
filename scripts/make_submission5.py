@@ -45,6 +45,11 @@ SEQ_DIRS = os.environ.get(
     ),
 ).split(",")
 
+# Optional causal-attention member(s). Empty by default (opt-in): when set, each
+# dir must hold an attn.npz (serve-format, scale A already baked into the head by
+# serve_attn.py valgate). Multiple dirs (seeds) are averaged into ONE neural member.
+ATTN_DIRS = [d for d in os.environ.get("SB_ATTN_DIRS", "").split(",") if d.strip()]
+
 # Round-10 retune: the real leaderboard proved VAL (2000 series) tracks the public
 # score and the 100-series reduced test is noise. A full VAL blend search (full +
 # both honest halves) + an honest cross-half meta-stacker found the logistic was
@@ -198,8 +203,126 @@ class StreamingLSTM:
         return float(self.Wo @ h + self.bo)
 
 
+# --- causal-attention member: O(t)-per-step float64, growing per-layer K/V cache
+# (causal => past K/V frozen => cacheable). Reproduces the train_attn EVAL forward
+# EXACTLY (norm_first, MHA scale 1/sqrt(head_dim), exact erf-GELU, LayerNorm eps
+# 1e-5 biased var). Calib order = nan_to_num FIRST then (x-mean)/scale then clip
+# (matches the EVALUATED model, NOT the GRU normalize-first order).
+try:
+    from scipy.special import erf as _erf
+except Exception:  # pragma: no cover
+    def _erf(x):
+        x = np.asarray(x, dtype=np.float64)
+        s = np.sign(x); ax = np.abs(x)
+        tt = 1.0 / (1.0 + 0.3275911 * ax)
+        poly = tt * (0.254829592 + tt * (-0.284496736 + tt * (
+            1.421413741 + tt * (-1.453152027 + tt * 1.061405429))))
+        return s * (1.0 - poly * np.exp(-ax * ax))
+
+_SQRT2 = np.sqrt(2.0)
+
+
+def _gelu(x):
+    return 0.5 * x * (1.0 + _erf(x / _SQRT2))
+
+
+def _layernorm(x, w, b, eps=1e-5):
+    mu = x.mean()
+    var = ((x - mu) ** 2).mean()
+    return (x - mu) / np.sqrt(var + eps) * w + b
+
+
+class _AttnCache:
+    __slots__ = ("buf", "n")
+
+    def __init__(self, d):
+        self.buf = np.zeros((64, d), dtype=np.float64)
+        self.n = 0
+
+    def append(self, v):
+        if self.n == self.buf.shape[0]:
+            self.buf = np.concatenate([self.buf, np.zeros_like(self.buf)], axis=0)
+        self.buf[self.n] = v
+        self.n += 1
+
+    @property
+    def arr(self):
+        return self.buf[: self.n]
+
+
+class StreamingAttn:
+    """O(t)-per-step causal Transformer member -> per-step logit (float64)."""
+
+    CLIP = 8.0
+    is_raw = False
+
+    def __init__(self, p, name_to_col):
+        F, d, heads, layers, ff = (int(v) for v in p["__config"])
+        self.d, self.heads, self.layers = d, heads, layers
+        self.hd = d // heads
+        self.attn_scale = 1.0 / np.sqrt(self.hd)
+        self.Wproj = np.ascontiguousarray(p["proj.weight"], dtype=np.float64)
+        self.bproj = np.asarray(p["proj.bias"], dtype=np.float64)
+        self.Whead = np.asarray(p["head.weight"], dtype=np.float64)[0]
+        self.bhead = float(np.asarray(p["head.bias"])[0])
+        self.layer = []
+        for l in range(layers):
+            pre = "enc.layers.%d." % l
+            self.layer.append({
+                "inW": np.ascontiguousarray(p[pre + "self_attn.in_proj_weight"], np.float64),
+                "inB": np.asarray(p[pre + "self_attn.in_proj_bias"], np.float64),
+                "outW": np.ascontiguousarray(p[pre + "self_attn.out_proj.weight"], np.float64),
+                "outB": np.asarray(p[pre + "self_attn.out_proj.bias"], np.float64),
+                "l1W": np.ascontiguousarray(p[pre + "linear1.weight"], np.float64),
+                "l1B": np.asarray(p[pre + "linear1.bias"], np.float64),
+                "l2W": np.ascontiguousarray(p[pre + "linear2.weight"], np.float64),
+                "l2B": np.asarray(p[pre + "linear2.bias"], np.float64),
+                "n1W": np.asarray(p[pre + "norm1.weight"], np.float64),
+                "n1B": np.asarray(p[pre + "norm1.bias"], np.float64),
+                "n2W": np.asarray(p[pre + "norm2.weight"], np.float64),
+                "n2B": np.asarray(p[pre + "norm2.bias"], np.float64),
+            })
+        self.mean = np.asarray(p["__mean"], dtype=np.float64)
+        self.scale = np.asarray(p["__scale"], dtype=np.float64)
+        self.keep = np.asarray([name_to_col[n] for n in
+                                [str(s) for s in p["__feature_names"]]],
+                               dtype=np.int64)
+        self.reset()
+
+    def reset(self):
+        self.Kc = [_AttnCache(self.d) for _ in range(self.layers)]
+        self.Vc = [_AttnCache(self.d) for _ in range(self.layers)]
+
+    def step(self, feats):
+        d, hd = self.d, self.hd
+        xs = feats[self.keep].astype(np.float64)
+        np.nan_to_num(xs, copy=False)
+        xs = (xs - self.mean) / self.scale
+        np.clip(xs, -self.CLIP, self.CLIP, out=xs)
+        h = self.Wproj @ xs + self.bproj
+        for l in range(self.layers):
+            P = self.layer[l]
+            a = _layernorm(h, P["n1W"], P["n1B"])
+            qkv = P["inW"] @ a + P["inB"]
+            q = qkv[:d]; k = qkv[d:2 * d]; v = qkv[2 * d:]
+            self.Kc[l].append(k); self.Vc[l].append(v)
+            K = self.Kc[l].arr; V = self.Vc[l].arr
+            ctx = np.empty(d, dtype=np.float64)
+            for hh in range(self.heads):
+                sl = slice(hh * hd, (hh + 1) * hd)
+                sc = (K[:, sl] @ q[sl]) * self.attn_scale
+                sc -= sc.max()
+                w = np.exp(sc); w /= w.sum()
+                ctx[sl] = w @ V[:, sl]
+            h = h + (P["outW"] @ ctx + P["outB"])
+            f = _layernorm(h, P["n2W"], P["n2B"])
+            h = h + (P["l2W"] @ _gelu(P["l1W"] @ f + P["l1B"]) + P["l2B"])
+        return float(self.Whead @ h + self.bhead)
+
+
 # Embedded recurrent weights (base64-encoded .npz), decoded at load time.
 _SEQ_B64 = __SEQ_B64__
+_ATTN_B64 = __ATTN_B64__
 
 # Raw-stream members consume per-step transforms of the historically-standardized
 # raw value z=(x-mu_h)/sd_h instead of the 152 calibrated features (a different
@@ -227,6 +350,15 @@ def _load_seqnets(name_to_col):
         n2c = _RAW_NAME_TO_COL if is_raw else name_to_col
         cls = StreamingLSTM if kind == "lstm" else StreamingGRU
         nets.append(cls(p, n2c, is_raw))
+    return nets
+
+
+def _load_attns(name_to_col):
+    nets = []
+    for blob in _ATTN_B64:
+        d = np.load(io.BytesIO(base64.b64decode(blob)), allow_pickle=True)
+        p = {k: d[k] for k in d.files}
+        nets.append(StreamingAttn(p, name_to_col))
     return nets
 
 
@@ -398,9 +530,11 @@ def infer(
     l_int = float(lg["intercept"][0])
 
     seqs = _load_seqnets(_NAME_TO_COL)
+    attns = _load_attns(_NAME_TO_COL)
     calib_seqs = [g for g in seqs if not g.is_raw]
     raw_seqs = [g for g in seqs if g.is_raw]
-    w_seq = (1.0 / len(seqs)) if seqs else 0.0
+    n_members = len(seqs) + (1 if attns else 0)
+    w_seq = (1.0 / n_members) if n_members else 0.0
 
     rank_b, rank_keep = _load_rank()
     rc = np.load(os.path.join(model_directory_path, "rank_const.npz"))
@@ -416,6 +550,8 @@ def infer(
         det.calibrate(np.asarray(x_historical, dtype=np.float64))
         for g in seqs:
             g.reset()
+        for a in attns:
+            a.reset()
         mu_h = det.mu_h
         sd_h = det.sd_h
         for point in x_online:
@@ -436,7 +572,7 @@ def infer(
             rank_as_gbt = (rraw - rk_mu) / rk_sd * gbt_sd + gbt_mu
             gbt5 = (1.0 - RANK_GW) * mean4 + RANK_GW * rank_as_gbt
             base_logit = (1.0 - W_LIN) * gbt5 + W_LIN * lin_logit
-            if seqs:
+            if seqs or attns:
                 seq_logit = 0.0
                 for g in calib_seqs:
                     seq_logit += g.step(feats)
@@ -444,6 +580,11 @@ def infer(
                     rv = _raw_vec(float(point), mu_h, sd_h)
                     for g in raw_seqs:
                         seq_logit += g.step(rv)
+                if attns:
+                    asum = 0.0
+                    for a in attns:
+                        asum += a.step(feats)
+                    seq_logit += asum / len(attns)
                 seq_logit *= w_seq
                 final_logit = (1.0 - W_GRU) * base_logit + W_GRU * seq_logit
             else:
@@ -501,6 +642,20 @@ def _embed_seqs() -> list:
     return blobs
 
 
+def _embed_attns() -> list:
+    blobs = []
+    for d in ATTN_DIRS:
+        d = d.strip()
+        path = os.path.join(d, "attn.npz")
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"missing attention weights: {path}")
+        with open(path, "rb") as fh:
+            blobs.append(base64.b64encode(fh.read()).decode("ascii"))
+        print(f"  embedded ATTN {path} "
+              f"({os.path.getsize(path)/1024:.0f} KB)")
+    return blobs
+
+
 def main() -> None:
     with open(F2) as fh:
         src2 = fh.read()
@@ -532,7 +687,10 @@ def main() -> None:
     body4 += "\n\nStreamingDetector = _Det4\n"
 
     blobs = _embed_seqs()
-    seqnet = SEQNET_CODE.replace("__SEQ_B64__", repr(blobs))
+    attn_blobs = _embed_attns()
+    seqnet = (SEQNET_CODE
+              .replace("__SEQ_B64__", repr(blobs))
+              .replace("__ATTN_B64__", repr(attn_blobs)))
     with open(os.path.join(RANK_DIR, "lgbm_rank.txt"), "rb") as fh:
         rank_blob = base64.b64encode(fh.read()).decode("ascii")
     print(f"  embedded RANK {RANK_DIR}/lgbm_rank.txt "
@@ -550,7 +708,8 @@ def main() -> None:
     with open(OUT, "w") as fh:
         fh.write(out)
     print(f"Wrote {OUT} ({len(out)} chars); {len(ENSEMBLE_RECIPES)} GBT + "
-          f"{len(blobs)} neural members; W_LIN={W_LIN} W_GRU={W_GRU}")
+          f"{len(blobs)} neural + {len(attn_blobs)} attn members; "
+          f"W_LIN={W_LIN} W_GRU={W_GRU}")
 
 
 if __name__ == "__main__":

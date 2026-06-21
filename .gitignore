@@ -24,6 +24,11 @@ features/val_et_logits.npz
 features/val_tsfm_probe.npz
 features/val_rank_logits*.npz
 
+# catch-all: every generated feature matrix / cached logit (~6 GB; regenerable via
+# scripts/build_features*.py + the eval scripts — attn/synth/tsfm/bocpd/tcn/pit
+# caches, etc.). Never pushed; trained model weights live under artifacts/ instead.
+features/*.npz
+
 # deploy local-test prediction output (regenerated every crunch test / infer)
 structural-break-real-time-chinchilla/prediction/
 

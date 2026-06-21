@@ -3,6 +3,11 @@
 Goal: beat the public leaderboard on **TS-AUC** (Time-Stratified AUC) for the
 2026 real-time structural-break detection competition (CrunchDAO).
 
+> **Status (2026-06-21):** rounds 4–11 are ledgered in `experiments.md` /
+> `context.md`. Latest shipped = **submission #9** (round 11, +2-seed causal-
+> attention member), real public **0.6049 (60.49%)** — new PB, **+0.0053** over the
+> prior best. VAL→real offset ≈ **−0.014**; gap to #1 (0.6322) ≈ 0.027.
+
 Environment: macOS (Apple Silicon), `uv` venv, Python 3.13.13 (cloud runtime is
 3.13.x). Core deps: numpy 2.4, pandas 3.0, scipy 1.17, scikit-learn 1.9,
 lightgbm 4.6, pyarrow 24, matplotlib 3.11.

@@ -5,7 +5,9 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "chronos-forecasting>=2.2.2",
     "crunch-cli>=11.7.0",
+    "huggingface-hub<1.0",
     "lightgbm>=4.6.0",
     "matplotlib>=3.11.0",
     "numpy>=2.4.6",

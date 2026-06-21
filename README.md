@@ -41,6 +41,14 @@ AUC (TS-AUC)** — a per-step, cross-sectional AUC averaged over time.
 | Round 4 — GRU neural member (single seed) blended | 0.6169 |
 | Round 4 — final (base + 3-seed GRU sub-ensemble, W_GRU=0.40) | 0.6161 |
 | **Round 5 — same members, GRU serve-bug fix + W_GRU=0.45 (correctness)** | **0.6160** |
+| Round 6–10 — probes (CNN/TCN/TSFM/BOCPD/stepnorm) + blend re-tune, `log_t` restored (see `experiments.md`) | 0.6170 |
+| **Round 11 — + causal self-attention member (2-seed), SHIPPED as #9** | **0.6187** |
+
+**Live leaderboard:** submission #9 scored **0.6049** on the real public test
+(60.49%) — a new personal best, **+0.0053** over the prior best #8 (0.5996) and
+≈3× the VAL gain, which refines the VAL→real offset to ≈ **−0.014**. The attention
+member generalised better on the hidden test than on VAL. Gap to #1 (0.6322) is
+now **~0.027**.
 
 Leaderboard context: top-10 cutoff ≈ 0.6135, #1 ≈ 0.6322 — the round-4 model
 **clears the top-10 cutoff** on the internal split. Round 4 added **+1.2 pts**
